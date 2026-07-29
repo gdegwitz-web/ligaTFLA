@@ -1,0 +1,1459 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Liga TFLA</title>
+
+<!-- Firebase compat SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<style>
+/* ============ TOKENS ============ */
+:root{
+  --pitch-deep: #0E3B2E;
+  --pitch-mid: #1C5C42;
+  --pitch-line: #6FA287;
+  --chalk: #F4F1E8;
+  --chalk-dim: #E7E2D3;
+  --ink: #16211C;
+  --ink-soft: #4A5750;
+  --card-yellow: #F5C518;
+  --card-red: #C1272D;
+  --white: #FFFFFF;
+
+  --display: 'Archivo Black', sans-serif;
+  --eyebrow: 'Barlow Condensed', sans-serif;
+  --body: 'Inter', sans-serif;
+  --mono: 'Space Mono', monospace;
+
+  --radius: 4px;
+  --shadow-card: 0 2px 0 rgba(14,59,46,0.12), 0 8px 24px rgba(14,59,46,0.08);
+}
+
+*{box-sizing:border-box; margin:0; padding:0;}
+html,body{height:100%;}
+body{
+  font-family: var(--body);
+  background: var(--chalk);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+button{font-family:inherit; cursor:pointer; border:none;}
+input,select,textarea{font-family:inherit; font-size: 15px;}
+a{color:inherit;}
+
+::selection{background: var(--card-yellow); color: var(--ink);}
+
+/* Focus visibility */
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible{
+  outline: 2px solid var(--pitch-mid);
+  outline-offset: 2px;
+}
+
+/* ============ LAYOUT SHELLS ============ */
+#app{min-height:100vh; display:flex; flex-direction:column;}
+
+.center-screen{
+  min-height:100vh; display:flex; align-items:center; justify-content:center;
+  padding: 24px; background:
+    radial-gradient(circle at 20% 10%, rgba(111,162,135,0.25), transparent 40%),
+    linear-gradient(180deg, var(--pitch-deep) 0%, #0A2E23 100%);
+}
+
+/* ============ SCOREBOARD HEADER (signature element) ============ */
+.scoreboard{
+  background: var(--pitch-deep);
+  color: var(--chalk);
+  padding: 14px 20px;
+  display:flex; align-items:center; justify-content:space-between;
+  border-bottom: 3px solid var(--card-yellow);
+  position: sticky; top:0; z-index: 40;
+}
+.scoreboard .brand{display:flex; align-items:center; gap:10px;}
+.scoreboard .brand .crest{
+  width:34px; height:34px; border-radius:50%;
+  background: var(--pitch-mid); border: 2px solid var(--card-yellow);
+  display:flex; align-items:center; justify-content:center;
+  font-family: var(--eyebrow); font-weight:700; font-size:14px; color:var(--card-yellow);
+}
+.scoreboard .brand h1{
+  font-family: var(--display); font-size: 18px; letter-spacing: 0.5px;
+}
+.scoreboard .brand .sub{
+  font-family: var(--eyebrow); font-size: 12px; color: var(--pitch-line); letter-spacing: 1.5px; text-transform:uppercase;
+}
+.scoreboard .user-chip{
+  display:flex; align-items:center; gap:10px; font-family: var(--eyebrow); font-size: 14px;
+}
+.role-tag{
+  font-family: var(--mono); font-size: 10px; text-transform:uppercase; letter-spacing:1px;
+  padding: 3px 8px; border-radius: 100px; background: var(--pitch-mid); color: var(--pitch-line);
+  border: 1px solid var(--pitch-line);
+}
+.logout-btn{
+  background:none; color: var(--chalk-dim); font-family: var(--eyebrow); font-size:13px;
+  text-decoration: underline; text-underline-offset:2px;
+}
+
+/* ============ APP BODY: NAV + CONTENT ============ */
+.app-body{display:flex; flex:1; min-height:0;}
+.side-nav{
+  width: 220px; background: var(--white); border-right: 1px solid var(--chalk-dim);
+  padding: 18px 10px; flex-shrink:0;
+}
+.side-nav button{
+  width:100%; text-align:left; background:none; padding: 11px 12px; margin-bottom:4px;
+  font-family: var(--eyebrow); font-size: 15px; font-weight:600; letter-spacing:0.3px;
+  color: var(--ink-soft); border-radius: var(--radius); display:flex; align-items:center; gap:10px;
+}
+.side-nav button .dot{width:6px; height:6px; border-radius:50%; background: transparent; flex-shrink:0;}
+.side-nav button:hover{background: var(--chalk);}
+.side-nav button.active{background: var(--pitch-deep); color: var(--chalk);}
+.side-nav button.active .dot{background: var(--card-yellow);}
+
+.content{flex:1; padding: 26px 30px; overflow-y:auto; min-width:0;}
+.content h2{font-family: var(--display); font-size: 22px; margin-bottom: 4px;}
+.content .page-sub{font-family: var(--eyebrow); color: var(--ink-soft); font-size:14px; margin-bottom:22px; letter-spacing:0.3px;}
+
+/* Mobile nav */
+.mobile-nav{display:none;}
+@media (max-width: 820px){
+  .side-nav{display:none;}
+  .mobile-nav{
+    display:flex; overflow-x:auto; background:var(--white); border-bottom:1px solid var(--chalk-dim);
+    padding: 8px 10px; gap:6px; position:sticky; top:61px; z-index:30;
+  }
+  .mobile-nav button{
+    flex-shrink:0; background: var(--chalk); border-radius:100px; padding:7px 14px;
+    font-family: var(--eyebrow); font-size:13px; font-weight:600; color: var(--ink-soft);
+  }
+  .mobile-nav button.active{background: var(--pitch-deep); color: var(--chalk);}
+  .content{padding: 18px;}
+}
+
+/* ============ CARDS / MATCH-CARD SIGNATURE ============ */
+.card{
+  background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow-card);
+  padding: 20px; margin-bottom: 16px; border: 1px solid var(--chalk-dim);
+}
+.acta-card{
+  background: var(--white); border-radius: var(--radius); overflow:hidden;
+  border: 1px solid var(--chalk-dim); box-shadow: var(--shadow-card); margin-bottom:16px;
+}
+.acta-card .acta-head{
+  background: var(--pitch-deep); color:var(--chalk); padding: 14px 18px;
+  display:flex; justify-content:space-between; align-items:center;
+  background-image: repeating-linear-gradient(90deg, transparent, transparent 8px, rgba(255,255,255,0.06) 8px, rgba(255,255,255,0.06) 9px);
+}
+.acta-head .jornada{font-family:var(--mono); font-size:11px; color:var(--pitch-line); text-transform:uppercase; letter-spacing:1px;}
+.acta-head .matchup{font-family:var(--display); font-size:16px; margin-top:2px;}
+.acta-status{
+  font-family: var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:1px;
+  padding:4px 9px; border-radius:100px;
+}
+.status-programado{background:#E7E2D3; color:var(--ink-soft);}
+.status-jugado{background:#FDECC8; color:#8A5A00;}
+.status-validado{background:#DCEFE3; color:var(--pitch-deep);}
+.status-pendiente{background:#FDECC8; color:#8A5A00;}
+.status-disputa{background:#FBDADA; color:var(--card-red);}
+
+.acta-body{padding:16px 18px;}
+.incident-row{
+  display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom: 1px dashed var(--chalk-dim);
+  font-size:14px;
+}
+.incident-row:last-child{border-bottom:none;}
+.incident-icon{
+  width:22px; height:22px; border-radius:3px; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-family:var(--mono); font-weight:700; color:var(--white);
+}
+.icon-gol{background: var(--pitch-mid);}
+.icon-amarilla{background: var(--card-yellow); color:var(--ink);}
+.icon-roja{background: var(--card-red);}
+.icon-otro{background: var(--ink-soft);}
+.incident-min{font-family:var(--mono); color:var(--ink-soft); font-size:12px; width:34px; flex-shrink:0;}
+
+/* ============ FORMS ============ */
+.field{margin-bottom:14px;}
+.field label{
+  display:block; font-family: var(--eyebrow); font-size:13px; font-weight:600; color:var(--ink-soft);
+  margin-bottom:5px; letter-spacing:0.2px; text-transform:uppercase;
+}
+.field input, .field select, .field textarea{
+  width:100%; padding:10px 12px; border:1px solid var(--chalk-dim); border-radius: var(--radius);
+  background: var(--chalk); color: var(--ink);
+}
+.field input:focus, .field select:focus, .field textarea:focus{background:var(--white);}
+.field-row{display:flex; gap:12px;}
+.field-row .field{flex:1;}
+
+.btn{
+  padding: 11px 20px; border-radius: var(--radius); font-family: var(--eyebrow); font-weight:700;
+  font-size: 14px; letter-spacing:0.4px; text-transform:uppercase; transition: transform 0.08s ease;
+}
+.btn:active{transform: scale(0.98);}
+.btn-primary{background: var(--pitch-deep); color: var(--chalk);}
+.btn-primary:hover{background: #0A2E23;}
+.btn-secondary{background: var(--white); color: var(--pitch-deep); border:1.5px solid var(--pitch-deep);}
+.btn-danger{background: var(--card-red); color: var(--white);}
+.btn-yellow{background: var(--card-yellow); color: var(--ink);}
+.btn-sm{padding:7px 12px; font-size:12px;}
+.btn-block{width:100%;}
+.btn:disabled{opacity:0.5; cursor:not-allowed;}
+
+.link-btn{background:none; color:var(--pitch-deep); font-weight:600; text-decoration:underline; text-underline-offset:2px; font-size:14px;}
+
+/* ============ AUTH SCREEN ============ */
+.auth-box{
+  background: var(--white); width:100%; max-width: 420px; border-radius: 6px;
+  padding: 34px 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+}
+.auth-box .crest-big{
+  width:52px; height:52px; border-radius:50%; background:var(--pitch-deep); border:3px solid var(--card-yellow);
+  display:flex; align-items:center; justify-content:center; font-family:var(--eyebrow); font-weight:700;
+  color:var(--card-yellow); font-size:20px; margin: 0 auto 14px;
+}
+.auth-box h1{font-family:var(--display); font-size:22px; text-align:center; margin-bottom:2px;}
+.auth-box .tag{font-family:var(--eyebrow); text-align:center; color:var(--ink-soft); font-size:13px; letter-spacing:1px; text-transform:uppercase; margin-bottom:24px;}
+.auth-toggle{display:flex; margin-bottom:20px; border-radius: var(--radius); overflow:hidden; border:1px solid var(--chalk-dim);}
+.auth-toggle button{flex:1; padding:10px; background:var(--chalk); font-family:var(--eyebrow); font-weight:600; font-size:14px;}
+.auth-toggle button.active{background:var(--pitch-deep); color:var(--chalk);}
+.auth-error{background:#FBDADA; color:var(--card-red); padding:10px 12px; border-radius:var(--radius); font-size:13px; margin-bottom:14px; font-family:var(--eyebrow);}
+.auth-note{background:var(--chalk); padding:10px 12px; border-radius:var(--radius); font-size:12.5px; color:var(--ink-soft); margin-bottom:14px; line-height:1.5;}
+
+/* ============ MISC ============ */
+.empty-state{
+  text-align:center; padding: 50px 20px; color: var(--ink-soft); font-family: var(--eyebrow); font-size:15px;
+}
+.badge{
+  display:inline-block; font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.5px;
+  padding:3px 8px; border-radius:100px; background:var(--chalk-dim); color:var(--ink-soft);
+}
+.badge-pendiente{background:#FDECC8; color:#8A5A00;}
+.badge-aprobado{background:#DCEFE3; color:var(--pitch-deep);}
+.grid-cards{display:grid; grid-template-columns: repeat(auto-fill, minmax(240px,1fr)); gap:14px;}
+.team-tile{
+  background:var(--white); border:1px solid var(--chalk-dim); border-radius:var(--radius); padding:16px;
+  box-shadow: var(--shadow-card); cursor:pointer; transition: border-color 0.15s;
+}
+.team-tile:hover{border-color: var(--pitch-mid);}
+.team-tile .tname{font-family:var(--display); font-size:15px; margin-bottom:2px;}
+.team-tile .tmeta{font-family:var(--eyebrow); font-size:12.5px; color:var(--ink-soft);}
+
+table.stats-table{width:100%; border-collapse:collapse; font-size:14px;}
+table.stats-table th{
+  text-align:left; font-family:var(--eyebrow); font-size:12px; text-transform:uppercase; letter-spacing:0.5px;
+  color:var(--ink-soft); padding:8px 10px; border-bottom:2px solid var(--ink);
+}
+table.stats-table td{padding:10px 10px; border-bottom:1px solid var(--chalk-dim);}
+table.stats-table tr:hover td{background:var(--chalk);}
+
+.loader{
+  width:28px; height:28px; border:3px solid var(--chalk-dim); border-top-color:var(--pitch-deep);
+  border-radius:50%; animation: spin 0.7s linear infinite; margin: 0 auto;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+.toast{
+  position:fixed; bottom:20px; right:20px; background:var(--ink); color:var(--white);
+  padding:12px 18px; border-radius:var(--radius); font-family:var(--eyebrow); font-size:14px;
+  box-shadow:0 8px 24px rgba(0,0,0,0.25); z-index:100; max-width:320px;
+}
+.toast.toast-error{background: var(--card-red);}
+.toast.toast-success{background: var(--pitch-deep); border-left:3px solid var(--card-yellow);}
+
+.modal-overlay{
+  position:fixed; inset:0; background:rgba(14,59,46,0.55); display:flex; align-items:center; justify-content:center;
+  z-index:80; padding:20px;
+}
+.modal-box{background:var(--white); border-radius:6px; padding:26px; max-width:520px; width:100%; max-height:85vh; overflow-y:auto;}
+.modal-box h3{font-family:var(--display); font-size:18px; margin-bottom:16px;}
+.close-x{position:absolute; top:16px; right:18px; background:none; font-size:20px; color:var(--ink-soft);}
+
+.section-divider{border:none; border-top:1px solid var(--chalk-dim); margin:18px 0;}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="center-screen" id="loadingScreen">
+    <div style="text-align:center; color:var(--chalk);">
+      <div class="loader" style="border-color: rgba(255,255,255,0.2); border-top-color: var(--card-yellow);"></div>
+      <p style="font-family:var(--eyebrow); margin-top:14px; letter-spacing:1px; text-transform:uppercase; font-size:13px;">Liga TFLA</p>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   LIGA TFLA — Configuración
+   ========================================================================= */
+
+// TODO: Gustavo — reemplazar con el firebaseConfig real del proyecto.
+// Mientras tanto la app corre en un modo de configuración pendiente.
+const firebaseConfig = {
+  apiKey: "AIzaSyCHvzXyqxo5-O4FTdcEVBWLEROfMFu_3Ok",
+  authDomain: "liga-tfla.firebaseapp.com",
+  projectId: "liga-tfla",
+  storageBucket: "liga-tfla.firebasestorage.app",
+  messagingSenderId: "332759991451",
+  appId: "1:332759991451:web:558e730ad4321aaef4723e"
+};
+
+const ROLES = {
+  LIGA_ADMIN: 'liga_admin',
+  DELEGADO: 'delegado',
+  ARBITRO: 'arbitro',
+  JUGADOR: 'jugador'
+};
+
+const ROLE_LABELS = {
+  liga_admin: 'Administrador de Liga',
+  delegado: 'Delegado',
+  arbitro: 'Árbitro',
+  jugador: 'Jugador'
+};
+
+let app, auth, db, storage;
+let firebaseReady = false;
+let currentUser = null;   // firebase auth user
+let currentProfile = null; // firestore users/{uid} doc
+let currentView = 'inicio';
+let unsubscribers = [];
+
+/* =========================================================================
+   INIT
+   ========================================================================= */
+function initFirebase(){
+  if(firebaseConfig.apiKey === "TODO_API_KEY"){
+    renderConfigPending();
+    return;
+  }
+  try{
+    app = firebase.initializeApp(firebaseConfig);
+    auth = firebase.auth();
+    db = firebase.firestore();
+    try{
+      storage = firebase.storage();
+    }catch(storageErr){
+      // Storage requiere el plan Blaze — no es necesario todavía, así que lo salteamos sin romper el resto de la app.
+      console.warn('Storage no disponible (plan Blaze no activado). Se puede activar más adelante.', storageErr);
+      storage = null;
+    }
+    db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
+    firebaseReady = true;
+    auth.onAuthStateChanged(handleAuthChange);
+  }catch(e){
+    console.error(e);
+    renderConfigPending();
+  }
+}
+
+function renderConfigPending(){
+  document.getElementById('app').innerHTML = `
+    <div class="center-screen">
+      <div class="auth-box" style="max-width:480px;">
+        <div class="crest-big">TFLA</div>
+        <h1>Configuración pendiente</h1>
+        <p class="tag">Falta conectar Firebase</p>
+        <div class="auth-note" style="margin-bottom:0;">
+          Esta app todavía no tiene un proyecto de Firebase conectado.
+          Para activarla: creá un proyecto en Firebase, habilitá <b>Authentication (Email/Password)</b>,
+          <b>Firestore</b> y <b>Storage</b>, y pegá el <code>firebaseConfig</code> en la constante
+          <code>firebaseConfig</code> al inicio del archivo <code>index.html</code>.
+          También hay que subir las reglas de seguridad de Firestore (archivo <code>firestore.rules</code> adjunto).
+        </div>
+      </div>
+    </div>`;
+}
+
+async function handleAuthChange(user){
+  unsubscribers.forEach(u => u());
+  unsubscribers = [];
+
+  if(!user){
+    currentUser = null;
+    currentProfile = null;
+    renderAuthScreen();
+    return;
+  }
+  currentUser = user;
+
+  // Listen live to the user's profile doc (role, team, estado)
+  const unsub = db.collection('users').doc(user.uid).onSnapshot(doc => {
+    if(!doc.exists){
+      // Profile not yet created (edge case) — sign out
+      auth.signOut();
+      return;
+    }
+    currentProfile = { id: doc.id, ...doc.data() };
+    if(currentProfile.estado !== 'aprobado'){
+      renderPendingScreen();
+    }else{
+      renderAppShell();
+    }
+  }, err => {
+    console.error('Error cargando perfil', err);
+  });
+  unsubscribers.push(unsub);
+}
+
+/* =========================================================================
+   AUTH SCREENS
+   ========================================================================= */
+function renderAuthScreen(){
+  document.getElementById('app').innerHTML = `
+    <div class="center-screen">
+      <div class="auth-box">
+        <div class="crest-big">TFLA</div>
+        <h1>Liga TFLA</h1>
+        <p class="tag">Estadísticas &amp; actas del torneo</p>
+        <div class="auth-toggle">
+          <button class="active" id="tabLogin" onclick="showAuthTab('login')">Ingresar</button>
+          <button id="tabRegister" onclick="showAuthTab('register')">Crear cuenta</button>
+        </div>
+        <div id="authError"></div>
+        <div id="authFormArea"></div>
+      </div>
+    </div>`;
+  showAuthTab('login');
+}
+
+function showAuthTab(tab){
+  document.getElementById('tabLogin').classList.toggle('active', tab==='login');
+  document.getElementById('tabRegister').classList.toggle('active', tab==='register');
+  document.getElementById('authError').innerHTML = '';
+  const area = document.getElementById('authFormArea');
+  if(tab === 'login'){
+    area.innerHTML = `
+      <div class="field"><label>Correo</label><input type="email" id="loginEmail" placeholder="tucorreo@ejemplo.com"></div>
+      <div class="field"><label>Contraseña</label><input type="password" id="loginPass" placeholder="••••••••"></div>
+      <button class="btn btn-primary btn-block" onclick="doLogin()">Ingresar</button>
+    `;
+  }else{
+    area.innerHTML = `
+      <div class="field"><label>Nombre completo</label><input type="text" id="regName" placeholder="Nombre y apellido"></div>
+      <div class="field"><label>Correo</label><input type="email" id="regEmail" placeholder="tucorreo@ejemplo.com"></div>
+      <div class="field"><label>Contraseña</label><input type="password" id="regPass" placeholder="Mínimo 6 caracteres"></div>
+      <div class="field">
+        <label>Rol</label>
+        <select id="regRole" onchange="toggleRegTeamField()">
+          <option value="jugador">Jugador</option>
+          <option value="delegado">Delegado de equipo</option>
+          <option value="arbitro">Árbitro</option>
+        </select>
+      </div>
+      <div class="field" id="regTeamField">
+        <label>Equipo</label>
+        <select id="regTeam"><option value="">Cargando equipos…</option></select>
+      </div>
+      <div class="auth-note">Tu cuenta quedará <b>pendiente de aprobación</b> hasta que el delegado de tu equipo (o el administrador de la liga) la valide.</div>
+      <button class="btn btn-primary btn-block" onclick="doRegister()">Crear cuenta</button>
+    `;
+    loadTeamsIntoSelect('regTeam');
+  }
+}
+
+function toggleRegTeamField(){
+  const role = document.getElementById('regRole').value;
+  document.getElementById('regTeamField').style.display = (role === 'arbitro') ? 'none' : 'block';
+}
+
+async function loadTeamsIntoSelect(selectId){
+  try{
+    const snap = await db.collection('equipos').orderBy('nombre').get();
+    const sel = document.getElementById(selectId);
+    if(!sel) return;
+    if(snap.empty){
+      sel.innerHTML = `<option value="">No hay equipos cargados aún</option>`;
+      return;
+    }
+    sel.innerHTML = snap.docs.map(d => `<option value="${d.id}">${escapeHtml(d.data().nombre)}</option>`).join('');
+  }catch(e){
+    console.error(e);
+  }
+}
+
+async function doLogin(){
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  showAuthError('');
+  if(!email || !pass){ showAuthError('Completá correo y contraseña.'); return; }
+  try{
+    await auth.signInWithEmailAndPassword(email, pass);
+  }catch(e){
+    showAuthError(translateAuthError(e));
+  }
+}
+
+async function doRegister(){
+  const nombre = document.getElementById('regName').value.trim();
+  const email = document.getElementById('regEmail').value.trim();
+  const pass = document.getElementById('regPass').value;
+  const rol = document.getElementById('regRole').value;
+  const equipoId = rol === 'arbitro' ? null : (document.getElementById('regTeam').value || null);
+
+  showAuthError('');
+  if(!nombre || !email || !pass){ showAuthError('Completá todos los campos.'); return; }
+  if(pass.length < 6){ showAuthError('La contraseña debe tener al menos 6 caracteres.'); return; }
+  if(rol !== 'arbitro' && !equipoId){ showAuthError('Elegí un equipo.'); return; }
+
+  try{
+    const cred = await auth.createUserWithEmailAndPassword(email, pass);
+    await db.collection('users').doc(cred.user.uid).set({
+      nombre, email, rol, equipoId,
+      estado: 'pendiente',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    // onAuthStateChanged will pick this up and route to pending screen
+  }catch(e){
+    showAuthError(translateAuthError(e));
+  }
+}
+
+function showAuthError(msg){
+  document.getElementById('authError').innerHTML = msg ? `<div class="auth-error">${escapeHtml(msg)}</div>` : '';
+}
+
+function translateAuthError(e){
+  const map = {
+    'auth/email-already-in-use': 'Ese correo ya tiene una cuenta.',
+    'auth/invalid-email': 'Correo inválido.',
+    'auth/weak-password': 'La contraseña es muy débil.',
+    'auth/user-not-found': 'No existe una cuenta con ese correo.',
+    'auth/wrong-password': 'Contraseña incorrecta.',
+    'auth/invalid-credential': 'Correo o contraseña incorrectos.',
+    'auth/too-many-requests': 'Demasiados intentos. Probá de nuevo en un momento.'
+  };
+  return map[e.code] || ('Error: ' + e.message);
+}
+
+function renderPendingScreen(){
+  document.getElementById('app').innerHTML = `
+    <div class="center-screen">
+      <div class="auth-box" style="text-align:center;">
+        <div class="crest-big">TFLA</div>
+        <h1>Cuenta pendiente</h1>
+        <p class="tag">Esperando aprobación</p>
+        <p style="font-size:14px; color:var(--ink-soft); line-height:1.6; margin-bottom:20px;">
+          Hola ${escapeHtml(currentProfile.nombre || '')}. Tu cuenta como <b>${ROLE_LABELS[currentProfile.rol]}</b>
+          fue creada y está esperando que el delegado de tu equipo (o el administrador de la liga) la apruebe.
+          Volvé a intentar más tarde.
+        </p>
+        <button class="btn btn-secondary btn-block" onclick="auth.signOut()">Cerrar sesión</button>
+      </div>
+    </div>`;
+}
+
+/* =========================================================================
+   APP SHELL (post-login, aprobado)
+   ========================================================================= */
+function navItemsForRole(rol){
+  const common = [
+    {id:'inicio', label:'Inicio'},
+    {id:'equipos', label:'Equipos'},
+    {id:'calendario', label:'Calendario'},
+    {id:'estadisticas', label:'Estadísticas'},
+  ];
+  if(rol === ROLES.LIGA_ADMIN){
+    return [...common, {id:'partidos', label:'Partidos'}, {id:'validaciones', label:'Validaciones'}, {id:'usuarios', label:'Usuarios'}];
+  }
+  if(rol === ROLES.DELEGADO){
+    return [...common, {id:'miplantilla', label:'Mi plantilla'}, {id:'validaciones', label:'Validaciones'}];
+  }
+  if(rol === ROLES.ARBITRO){
+    return [...common, {id:'misactas', label:'Mis actas'}];
+  }
+  // jugador
+  return [...common, {id:'mificha', label:'Mi ficha'}];
+}
+
+function renderAppShell(){
+  currentView = currentView || 'inicio';
+  const nav = navItemsForRole(currentProfile.rol);
+  if(!nav.find(n => n.id === currentView)) currentView = 'inicio';
+
+  document.getElementById('app').innerHTML = `
+    <div class="scoreboard">
+      <div class="brand">
+        <div class="crest">TF</div>
+        <div>
+          <h1>Liga TFLA</h1>
+          <div class="sub">Torneo 2026</div>
+        </div>
+      </div>
+      <div class="user-chip">
+        <span class="role-tag">${ROLE_LABELS[currentProfile.rol]}</span>
+        <span>${escapeHtml(currentProfile.nombre)}</span>
+        <button class="logout-btn" onclick="auth.signOut()">Salir</button>
+      </div>
+    </div>
+    <div class="mobile-nav" id="mobileNav"></div>
+    <div class="app-body">
+      <div class="side-nav" id="sideNav"></div>
+      <div class="content" id="content"></div>
+    </div>
+    <div id="toastArea"></div>
+    <div id="modalArea"></div>
+  `;
+  renderNav(nav);
+  routeTo(currentView);
+}
+
+function renderNav(nav){
+  const html = nav.map(n => `<button class="${n.id===currentView?'active':''}" onclick="routeTo('${n.id}')"><span class="dot"></span>${n.label}</button>`).join('');
+  document.getElementById('sideNav').innerHTML = html;
+  document.getElementById('mobileNav').innerHTML = html;
+}
+
+function routeTo(view){
+  currentView = view;
+  const nav = navItemsForRole(currentProfile.rol);
+  renderNav(nav);
+  const c = document.getElementById('content');
+  c.innerHTML = `<div class="loader" style="margin-top:60px;"></div>`;
+
+  const routes = {
+    inicio: renderInicio,
+    equipos: renderEquipos,
+    miplantilla: renderMiPlantilla,
+    calendario: renderCalendario,
+    partidos: renderPartidosAdmin,
+    misactas: renderMisActas,
+    validaciones: renderValidaciones,
+    estadisticas: renderEstadisticas,
+    mificha: renderMiFicha,
+    usuarios: renderUsuarios
+  };
+  (routes[view] || renderInicio)();
+}
+
+/* =========================================================================
+   HELPERS
+   ========================================================================= */
+function escapeHtml(str){
+  if(str===undefined || str===null) return '';
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function toast(msg, type=''){
+  const area = document.getElementById('toastArea');
+  if(!area) return;
+  const el = document.createElement('div');
+  el.className = 'toast ' + (type ? 'toast-'+type : '');
+  el.textContent = msg;
+  area.appendChild(el);
+  setTimeout(()=> el.remove(), 3500);
+}
+function openModal(html){
+  document.getElementById('modalArea').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
+      <div class="modal-box" style="position:relative;">
+        <button class="close-x" onclick="closeModal()">✕</button>
+        ${html}
+      </div>
+    </div>`;
+}
+function closeModal(){ document.getElementById('modalArea').innerHTML = ''; }
+
+async function getEquipoNombre(equipoId){
+  if(!equipoId) return '—';
+  try{
+    const doc = await db.collection('equipos').doc(equipoId).get();
+    return doc.exists ? doc.data().nombre : '—';
+  }catch(e){ return '—'; }
+}
+
+/* =========================================================================
+   VIEW: INICIO
+   ========================================================================= */
+async function renderInicio(){
+  const c = document.getElementById('content');
+  let equipoNombre = '—';
+  if(currentProfile.equipoId){
+    equipoNombre = await getEquipoNombre(currentProfile.equipoId);
+  }
+  c.innerHTML = `
+    <h2>Bienvenido, ${escapeHtml(currentProfile.nombre)}</h2>
+    <p class="page-sub">${ROLE_LABELS[currentProfile.rol]}${currentProfile.equipoId ? ' · ' + escapeHtml(equipoNombre) : ''}</p>
+    <div class="grid-cards">
+      <div class="card">
+        <h3 style="font-family:var(--eyebrow); text-transform:uppercase; font-size:13px; color:var(--ink-soft); margin-bottom:8px;">Próximos pasos</h3>
+        <p style="font-size:14px; line-height:1.6;">${inicioMensaje()}</p>
+      </div>
+    </div>`;
+}
+
+function inicioMensaje(){
+  switch(currentProfile.rol){
+    case ROLES.LIGA_ADMIN:
+      return 'Desde acá podés crear equipos, programar partidos, aprobar usuarios y supervisar las validaciones de actas.';
+    case ROLES.DELEGADO:
+      return 'Gestioná la plantilla de tu equipo, aprobá jugadores nuevos y validá las actas de los partidos donde participó tu equipo.';
+    case ROLES.ARBITRO:
+      return 'Completá el acta de cada partido que dirigís: goleadores, tarjetas amarillas, rojas y demás incidencias.';
+    default:
+      return 'Completá tu ficha de jugador y seguí las estadísticas y el calendario del torneo.';
+  }
+}
+
+/* =========================================================================
+   VIEW: EQUIPOS (lista pública + gestión liga_admin)
+   ========================================================================= */
+async function renderEquipos(){
+  const c = document.getElementById('content');
+  const isAdmin = currentProfile.rol === ROLES.LIGA_ADMIN;
+  c.innerHTML = `
+    <h2>Equipos</h2>
+    <p class="page-sub">Plantillas registradas en el torneo</p>
+    ${isAdmin ? `<button class="btn btn-primary" style="margin-bottom:18px;" onclick="openNuevoEquipoModal()">+ Nuevo equipo</button>` : ''}
+    <div class="grid-cards" id="equiposGrid"><div class="loader"></div></div>
+  `;
+  try{
+    const snap = await db.collection('equipos').orderBy('nombre').get();
+    const grid = document.getElementById('equiposGrid');
+    if(snap.empty){
+      grid.innerHTML = `<div class="empty-state">Todavía no hay equipos cargados.</div>`;
+      return;
+    }
+    grid.innerHTML = snap.docs.map(d => {
+      const e = d.data();
+      return `<div class="team-tile" onclick="verEquipo('${d.id}')">
+        <div class="tname">${escapeHtml(e.nombre)}</div>
+        <div class="tmeta">${e.jugadoresCount || 0} jugadores registrados</div>
+      </div>`;
+    }).join('');
+  }catch(e){
+    document.getElementById('equiposGrid').innerHTML = `<div class="empty-state">Error cargando equipos: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function openNuevoEquipoModal(){
+  openModal(`
+    <h3>Nuevo equipo</h3>
+    <div class="field"><label>Nombre del equipo</label><input type="text" id="neqNombre" placeholder="Ej: Atlético Miranda"></div>
+    <div class="field-row">
+      <div class="field"><label>Color primario</label><input type="color" id="neqColor1" value="#0E3B2E"></div>
+      <div class="field"><label>Color secundario</label><input type="color" id="neqColor2" value="#F5C518"></div>
+    </div>
+    <button class="btn btn-primary btn-block" onclick="crearEquipo()">Crear equipo</button>
+  `);
+}
+
+async function crearEquipo(){
+  const nombre = document.getElementById('neqNombre').value.trim();
+  if(!nombre){ toast('Ponele un nombre al equipo', 'error'); return; }
+  try{
+    await db.collection('equipos').add({
+      nombre,
+      colorPrimario: document.getElementById('neqColor1').value,
+      colorSecundario: document.getElementById('neqColor2').value,
+      jugadoresCount: 0,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    closeModal();
+    toast('Equipo creado', 'success');
+    renderEquipos();
+  }catch(e){
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+async function verEquipo(equipoId){
+  const c = document.getElementById('content');
+  c.innerHTML = `<button class="link-btn" onclick="routeTo('equipos')">← Volver a equipos</button><div class="loader" style="margin-top:20px;"></div>`;
+  try{
+    const eqDoc = await db.collection('equipos').doc(equipoId).get();
+    const eq = eqDoc.data();
+    const jugSnap = await db.collection('jugadores').where('equipoId','==',equipoId).orderBy('numero').get();
+    const rows = jugSnap.docs.map(d => {
+      const j = d.data();
+      return `<tr>
+        <td>${j.numero ?? '—'}</td>
+        <td>${escapeHtml(j.nombre || '')}</td>
+        <td>${escapeHtml(j.posicion || '—')}</td>
+        <td><span class="badge ${j.estado==='aprobado'?'badge-aprobado':'badge-pendiente'}">${j.estado==='aprobado'?'Ficha completa':'Pendiente'}</span></td>
+      </tr>`;
+    }).join('');
+    document.getElementById('content').innerHTML = `
+      <button class="link-btn" onclick="routeTo('equipos')">← Volver a equipos</button>
+      <h2 style="margin-top:14px;">${escapeHtml(eq.nombre)}</h2>
+      <p class="page-sub">Plantilla del equipo</p>
+      <div class="card">
+        ${jugSnap.empty ? '<div class="empty-state">Sin jugadores registrados todavía.</div>' : `
+        <table class="stats-table">
+          <thead><tr><th>#</th><th>Nombre</th><th>Posición</th><th>Estado</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`}
+      </div>
+    `;
+  }catch(e){
+    document.getElementById('content').innerHTML = `<div class="empty-state">Error: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+/* =========================================================================
+   VIEW: MI PLANTILLA (delegado) — gestión de jugadores + aprobación
+   ========================================================================= */
+async function renderMiPlantilla(){
+  const c = document.getElementById('content');
+  if(!currentProfile.equipoId){
+    c.innerHTML = `<h2>Mi plantilla</h2><div class="empty-state">Tu cuenta no tiene un equipo asignado. Contactá al administrador de la liga.</div>`;
+    return;
+  }
+  c.innerHTML = `
+    <h2>Mi plantilla</h2>
+    <p class="page-sub">Jugadores y solicitudes pendientes de tu equipo</p>
+    <div id="pendientesArea"></div>
+    <hr class="section-divider">
+    <div id="plantillaArea"><div class="loader"></div></div>
+  `;
+
+  try{
+    const [pendSnap, apSnap] = await Promise.all([
+      db.collection('users').where('equipoId','==',currentProfile.equipoId).where('estado','==','pendiente').get(),
+      db.collection('jugadores').where('equipoId','==',currentProfile.equipoId).orderBy('nombre').get()
+    ]);
+
+    const pendArea = document.getElementById('pendientesArea');
+    if(pendSnap.empty){
+      pendArea.innerHTML = '';
+    }else{
+      pendArea.innerHTML = `
+        <h3 style="font-family:var(--eyebrow); text-transform:uppercase; font-size:13px; color:var(--ink-soft); margin-bottom:10px;">Solicitudes pendientes (${pendSnap.size})</h3>
+        ${pendSnap.docs.map(d => {
+          const u = d.data();
+          return `<div class="card" style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <div style="font-weight:600;">${escapeHtml(u.nombre)}</div>
+              <div class="badge">${ROLE_LABELS[u.rol]}</div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-sm btn-primary" onclick="aprobarUsuario('${d.id}')">Aprobar</button>
+              <button class="btn btn-sm btn-secondary" onclick="rechazarUsuario('${d.id}')">Rechazar</button>
+            </div>
+          </div>`;
+        }).join('')}
+      `;
+    }
+
+    const plArea = document.getElementById('plantillaArea');
+    plArea.innerHTML = `
+      <h3 style="font-family:var(--eyebrow); text-transform:uppercase; font-size:13px; color:var(--ink-soft); margin-bottom:10px;">Plantilla (${apSnap.size})</h3>
+      ${apSnap.empty ? '<div class="empty-state">Todavía no hay fichas de jugador completas.</div>' : apSnap.docs.map(d => {
+        const j = d.data();
+        return `<div class="card" style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-weight:600;">#${j.numero ?? '—'} · ${escapeHtml(j.nombre)}</div>
+            <div class="tmeta" style="font-family:var(--eyebrow); font-size:12.5px; color:var(--ink-soft);">${escapeHtml(j.posicion || '')}</div>
+          </div>
+          <span class="badge badge-aprobado">Completa</span>
+        </div>`;
+      }).join('')}
+    `;
+  }catch(e){
+    c.innerHTML += `<div class="empty-state">Error: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+async function aprobarUsuario(uid){
+  try{
+    await db.collection('users').doc(uid).update({estado:'aprobado'});
+    toast('Usuario aprobado', 'success');
+    renderMiPlantilla();
+  }catch(e){ toast('Error: '+e.message, 'error'); }
+}
+async function rechazarUsuario(uid){
+  if(!confirm('¿Rechazar y eliminar esta solicitud?')) return;
+  try{
+    await db.collection('users').doc(uid).update({estado:'rechazado'});
+    toast('Solicitud rechazada');
+    renderMiPlantilla();
+  }catch(e){ toast('Error: '+e.message, 'error'); }
+}
+
+/* =========================================================================
+   VIEW: MI FICHA (jugador)
+   ========================================================================= */
+async function renderMiFicha(){
+  const c = document.getElementById('content');
+  c.innerHTML = `<h2>Mi ficha de jugador</h2><p class="page-sub">Completá tus datos — el delegado los verá en la plantilla del equipo</p><div class="card" id="fichaCard"><div class="loader"></div></div>`;
+
+  let existente = null;
+  try{
+    const snap = await db.collection('jugadores').where('uid','==',currentUser.uid).limit(1).get();
+    if(!snap.empty) existente = { id: snap.docs[0].id, ...snap.docs[0].data() };
+  }catch(e){ console.error(e); }
+
+  const f = existente || {};
+  document.getElementById('fichaCard').innerHTML = `
+    <div class="field-row">
+      <div class="field"><label>Nombre completo</label><input id="fNombre" value="${escapeHtml(f.nombre||currentProfile.nombre||'')}"></div>
+      <div class="field"><label>Cédula / documento</label><input id="fCedula" value="${escapeHtml(f.cedula||'')}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Fecha de nacimiento</label><input type="date" id="fFecha" value="${f.fechaNacimiento||''}"></div>
+      <div class="field"><label>Número de camiseta</label><input type="number" id="fNumero" value="${f.numero??''}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Posición</label>
+        <select id="fPosicion">
+          ${['Portero','Defensa','Mediocampista','Delantero'].map(p=>`<option ${f.posicion===p?'selected':''}>${p}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field"><label>Teléfono de contacto</label><input id="fTelefono" value="${escapeHtml(f.telefono||'')}"></div>
+    </div>
+    <div class="field"><label>Contacto de emergencia</label><input id="fEmergencia" value="${escapeHtml(f.contactoEmergencia||'')}" placeholder="Nombre y teléfono"></div>
+    <div class="field"><label>Condición médica relevante (opcional)</label><textarea id="fMedica" rows="2">${escapeHtml(f.condicionMedica||'')}</textarea></div>
+    <button class="btn btn-primary" onclick="guardarFicha('${existente ? existente.id : ''}')">${existente ? 'Actualizar ficha' : 'Guardar ficha'}</button>
+  `;
+}
+
+async function guardarFicha(existingId){
+  const data = {
+    uid: currentUser.uid,
+    equipoId: currentProfile.equipoId,
+    nombre: document.getElementById('fNombre').value.trim(),
+    cedula: document.getElementById('fCedula').value.trim(),
+    fechaNacimiento: document.getElementById('fFecha').value,
+    numero: Number(document.getElementById('fNumero').value) || null,
+    posicion: document.getElementById('fPosicion').value,
+    telefono: document.getElementById('fTelefono').value.trim(),
+    contactoEmergencia: document.getElementById('fEmergencia').value.trim(),
+    condicionMedica: document.getElementById('fMedica').value.trim(),
+    estado: 'aprobado',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  if(!data.nombre){ toast('El nombre es obligatorio', 'error'); return; }
+  try{
+    if(existingId){
+      await db.collection('jugadores').doc(existingId).update(data);
+    }else{
+      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      await db.collection('jugadores').add(data);
+      await db.collection('equipos').doc(currentProfile.equipoId).update({
+        jugadoresCount: firebase.firestore.FieldValue.increment(1)
+      });
+    }
+    toast('Ficha guardada', 'success');
+  }catch(e){
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+/* =========================================================================
+   VIEW: CALENDARIO
+   ========================================================================= */
+async function renderCalendario(){
+  const c = document.getElementById('content');
+  c.innerHTML = `<h2>Calendario</h2><p class="page-sub">Partidos del torneo</p><div id="calArea"><div class="loader"></div></div>`;
+  try{
+    const snap = await db.collection('partidos').orderBy('fecha').get();
+    const area = document.getElementById('calArea');
+    if(snap.empty){ area.innerHTML = '<div class="empty-state">Todavía no hay partidos programados.</div>'; return; }
+
+    const rows = await Promise.all(snap.docs.map(async d => {
+      const p = d.data();
+      const [local, visitante] = await Promise.all([getEquipoNombre(p.equipoLocalId), getEquipoNombre(p.equipoVisitanteId)]);
+      const fecha = p.fecha ? new Date(p.fecha).toLocaleString('es-VE', {dateStyle:'medium', timeStyle:'short'}) : '—';
+      return `<div class="acta-card">
+        <div class="acta-head">
+          <div>
+            <div class="jornada">Jornada ${p.jornada ?? '—'} · ${fecha}</div>
+            <div class="matchup">${escapeHtml(local)} vs ${escapeHtml(visitante)}</div>
+          </div>
+          <span class="acta-status status-${p.estado||'programado'}">${estadoLabel(p.estado)}</span>
+        </div>
+        ${p.estado === 'jugado' || p.estado === 'validado' ? `<div class="acta-body" style="font-family:var(--display); font-size:20px; text-align:center;">${p.golesLocal ?? 0} — ${p.golesVisitante ?? 0}</div>` : ''}
+      </div>`;
+    }));
+    area.innerHTML = rows.join('');
+  }catch(e){
+    document.getElementById('calArea').innerHTML = `<div class="empty-state">Error: ${escapeHtml(e.message)}</div>`;
+  }
+}
+function estadoLabel(estado){
+  return {programado:'Programado', jugado:'Jugado · sin validar', validado:'Oficial'}[estado] || 'Programado';
+}
+
+/* =========================================================================
+   VIEW: PARTIDOS (liga_admin) — crear partidos
+   ========================================================================= */
+async function renderPartidosAdmin(){
+  const c = document.getElementById('content');
+  c.innerHTML = `
+    <h2>Partidos</h2>
+    <p class="page-sub">Programación del torneo</p>
+    <button class="btn btn-primary" style="margin-bottom:18px;" onclick="openNuevoPartidoModal()">+ Programar partido</button>
+    <div id="calArea"><div class="loader"></div></div>
+  `;
+  await renderCalendarioInto('calArea');
+}
+async function renderCalendarioInto(containerId){
+  try{
+    const snap = await db.collection('partidos').orderBy('fecha').get();
+    const area = document.getElementById(containerId);
+    if(snap.empty){ area.innerHTML = '<div class="empty-state">Todavía no hay partidos programados.</div>'; return; }
+    const rows = await Promise.all(snap.docs.map(async d => {
+      const p = d.data();
+      const [local, visitante] = await Promise.all([getEquipoNombre(p.equipoLocalId), getEquipoNombre(p.equipoVisitanteId)]);
+      const fecha = p.fecha ? new Date(p.fecha).toLocaleString('es-VE', {dateStyle:'medium', timeStyle:'short'}) : '—';
+      return `<div class="acta-card">
+        <div class="acta-head">
+          <div>
+            <div class="jornada">Jornada ${p.jornada ?? '—'} · ${fecha}</div>
+            <div class="matchup">${escapeHtml(local)} vs ${escapeHtml(visitante)}</div>
+          </div>
+          <span class="acta-status status-${p.estado||'programado'}">${estadoLabel(p.estado)}</span>
+        </div>
+      </div>`;
+    }));
+    area.innerHTML = rows.join('');
+  }catch(e){
+    document.getElementById(containerId).innerHTML = `<div class="empty-state">Error: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+async function openNuevoPartidoModal(){
+  const snap = await db.collection('equipos').orderBy('nombre').get();
+  const opts = snap.docs.map(d => `<option value="${d.id}">${escapeHtml(d.data().nombre)}</option>`).join('');
+  openModal(`
+    <h3>Programar partido</h3>
+    <div class="field-row">
+      <div class="field"><label>Equipo local</label><select id="pLocal">${opts}</select></div>
+      <div class="field"><label>Equipo visitante</label><select id="pVisitante">${opts}</select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Fecha y hora</label><input type="datetime-local" id="pFecha"></div>
+      <div class="field"><label>Jornada</label><input type="number" id="pJornada" min="1"></div>
+    </div>
+    <div class="field"><label>Cancha / sede</label><input type="text" id="pCancha"></div>
+    <button class="btn btn-primary btn-block" onclick="crearPartido()">Programar</button>
+  `);
+}
+
+async function crearPartido(){
+  const equipoLocalId = document.getElementById('pLocal').value;
+  const equipoVisitanteId = document.getElementById('pVisitante').value;
+  if(equipoLocalId === equipoVisitanteId){ toast('El local y el visitante deben ser distintos', 'error'); return; }
+  try{
+    await db.collection('partidos').add({
+      equipoLocalId, equipoVisitanteId,
+      fecha: document.getElementById('pFecha').value ? new Date(document.getElementById('pFecha').value).toISOString() : null,
+      jornada: Number(document.getElementById('pJornada').value) || null,
+      cancha: document.getElementById('pCancha').value.trim(),
+      estado: 'programado',
+      golesLocal: null, golesVisitante: null,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    closeModal();
+    toast('Partido programado', 'success');
+    renderPartidosAdmin();
+  }catch(e){
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+/* =========================================================================
+   VIEW: MIS ACTAS (árbitro) — llenar acta de incidencias
+   ========================================================================= */
+async function renderMisActas(){
+  const c = document.getElementById('content');
+  c.innerHTML = `<h2>Mis actas</h2><p class="page-sub">Partidos programados — completá el acta al finalizar</p><div id="actasArea"><div class="loader"></div></div>`;
+  try{
+    const snap = await db.collection('partidos').orderBy('fecha').get();
+    const area = document.getElementById('actasArea');
+    if(snap.empty){ area.innerHTML = '<div class="empty-state">No hay partidos programados.</div>'; return; }
+    const rows = await Promise.all(snap.docs.map(async d => {
+      const p = d.data();
+      const [local, visitante] = await Promise.all([getEquipoNombre(p.equipoLocalId), getEquipoNombre(p.equipoVisitanteId)]);
+      const fecha = p.fecha ? new Date(p.fecha).toLocaleString('es-VE', {dateStyle:'medium', timeStyle:'short'}) : '—';
+      return `<div class="acta-card">
+        <div class="acta-head">
+          <div>
+            <div class="jornada">Jornada ${p.jornada ?? '—'} · ${fecha}</div>
+            <div class="matchup">${escapeHtml(local)} vs ${escapeHtml(visitante)}</div>
+          </div>
+          <span class="acta-status status-${p.estado||'programado'}">${estadoLabel(p.estado)}</span>
+        </div>
+        <div class="acta-body">
+          <button class="btn btn-sm ${p.estado==='programado' ? 'btn-primary' : 'btn-secondary'}" onclick="abrirActaForm('${d.id}')">
+            ${p.estado === 'programado' ? 'Llenar acta' : 'Ver / editar acta'}
+          </button>
+        </div>
+      </div>`;
+    }));
+    area.innerHTML = rows.join('');
+  }catch(e){
+    document.getElementById('actasArea').innerHTML = `<div class="empty-state">Error: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+let actaIncidenciasTemp = [];
+
+async function abrirActaForm(partidoId){
+  const c = document.getElementById('content');
+  c.innerHTML = `<div class="loader" style="margin-top:60px;"></div>`;
+  const pDoc = await db.collection('partidos').doc(partidoId).get();
+  const p = pDoc.data();
+  const [local, visitante] = await Promise.all([getEquipoNombre(p.equipoLocalId), getEquipoNombre(p.equipoVisitanteId)]);
+
+  const [jugLocalSnap, jugVisSnap, actaDoc] = await Promise.all([
+    db.collection('jugadores').where('equipoId','==',p.equipoLocalId).get(),
+    db.collection('jugadores').where('equipoId','==',p.equipoVisitanteId).get(),
+    db.collection('actas').doc(partidoId).get()
+  ]);
+
+  const jugadoresMap = {};
+  jugLocalSnap.docs.forEach(d => jugadoresMap[d.id] = {...d.data(), equipoLado:'local'});
+  jugVisSnap.docs.forEach(d => jugadoresMap[d.id] = {...d.data(), equipoLado:'visitante'});
+
+  actaIncidenciasTemp = actaDoc.exists ? (actaDoc.data().incidencias || []) : [];
+
+  const jugOptions = (lado) => Object.entries(jugadoresMap)
+    .filter(([id,j]) => j.equipoLado === lado)
+    .map(([id,j]) => `<option value="${id}">#${j.numero??'-'} ${escapeHtml(j.nombre)}</option>`).join('');
+
+  c.innerHTML = `
+    <button class="link-btn" onclick="renderMisActas()">← Volver</button>
+    <h2 style="margin-top:14px;">${escapeHtml(local)} vs ${escapeHtml(visitante)}</h2>
+    <p class="page-sub">Jornada ${p.jornada ?? '—'}</p>
+
+    <div class="card">
+      <div class="field-row">
+        <div class="field"><label>Goles ${escapeHtml(local)}</label><input type="number" id="golesLocal" min="0" value="${p.golesLocal ?? 0}"></div>
+        <div class="field"><label>Goles ${escapeHtml(visitante)}</label><input type="number" id="golesVisitante" min="0" value="${p.golesVisitante ?? 0}"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="font-family:var(--eyebrow); text-transform:uppercase; font-size:13px; color:var(--ink-soft); margin-bottom:12px;">Agregar incidencia</h3>
+      <div class="field-row">
+        <div class="field"><label>Tipo</label>
+          <select id="incTipo">
+            <option value="gol">Gol</option>
+            <option value="amarilla">Tarjeta amarilla</option>
+            <option value="roja">Tarjeta roja</option>
+            <option value="otro">Otra incidencia</option>
+          </select>
+        </div>
+        <div class="field"><label>Minuto</label><input type="number" id="incMinuto" min="0" max="130"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Equipo</label>
+          <select id="incEquipoLado" onchange="refreshIncJugadorOptions()">
+            <option value="local">${escapeHtml(local)}</option>
+            <option value="visitante">${escapeHtml(visitante)}</option>
+          </select>
+        </div>
+        <div class="field"><label>Jugador</label><select id="incJugador"></select></div>
+      </div>
+      <div class="field"><label>Detalle (opcional)</label><input type="text" id="incDetalle" placeholder="Ej: doble amarilla, autogol, etc."></div>
+      <button class="btn btn-secondary" onclick="agregarIncidencia()">+ Agregar incidencia</button>
+    </div>
+
+    <div class="acta-card">
+      <div class="acta-head"><div class="matchup" style="font-size:14px;">Incidencias registradas</div></div>
+      <div class="acta-body" id="incidenciasList"></div>
+    </div>
+
+    <button class="btn btn-primary" style="margin-top:6px;" onclick="guardarActa('${partidoId}')">Guardar y enviar a validación</button>
+  `;
+
+  window.__jugOptions = { local: jugOptions('local'), visitante: jugOptions('visitante'), map: jugadoresMap };
+  refreshIncJugadorOptions();
+  renderIncidenciasList();
+}
+
+function refreshIncJugadorOptions(){
+  const lado = document.getElementById('incEquipoLado').value;
+  document.getElementById('incJugador').innerHTML = window.__jugOptions[lado] || '<option value="">Sin jugadores</option>';
+}
+
+function agregarIncidencia(){
+  const tipo = document.getElementById('incTipo').value;
+  const minuto = Number(document.getElementById('incMinuto').value) || 0;
+  const lado = document.getElementById('incEquipoLado').value;
+  const jugadorId = document.getElementById('incJugador').value;
+  const detalle = document.getElementById('incDetalle').value.trim();
+  if(!jugadorId){ toast('Elegí un jugador', 'error'); return; }
+  const jugador = window.__jugOptions.map[jugadorId];
+  actaIncidenciasTemp.push({
+    tipo, minuto, jugadorId, jugadorNombre: jugador.nombre, jugadorNumero: jugador.numero || null,
+    equipoLado: lado, detalle
+  });
+  actaIncidenciasTemp.sort((a,b) => a.minuto - b.minuto);
+  document.getElementById('incDetalle').value = '';
+  renderIncidenciasList();
+}
+
+function quitarIncidencia(idx){
+  actaIncidenciasTemp.splice(idx,1);
+  renderIncidenciasList();
+}
+
+function renderIncidenciasList(){
+  const list = document.getElementById('incidenciasList');
+  if(!list) return;
+  if(actaIncidenciasTemp.length === 0){
+    list.innerHTML = '<div class="empty-state" style="padding:20px;">Sin incidencias registradas todavía.</div>';
+    return;
+  }
+  const iconMap = {gol:'⚽', amarilla:'▮', roja:'▮', otro:'i'};
+  list.innerHTML = actaIncidenciasTemp.map((inc,idx) => `
+    <div class="incident-row">
+      <span class="incident-min">${inc.minuto}'</span>
+      <span class="incident-icon icon-${inc.tipo}">${iconMap[inc.tipo]}</span>
+      <span style="flex:1;">#${inc.jugadorNumero ?? '-'} ${escapeHtml(inc.jugadorNombre)} ${inc.detalle ? '— '+escapeHtml(inc.detalle) : ''}</span>
+      <button class="link-btn" style="font-size:12px;" onclick="quitarIncidencia(${idx})">quitar</button>
+    </div>
+  `).join('');
+}
+
+async function guardarActa(partidoId){
+  try{
+    const golesLocal = Number(document.getElementById('golesLocal').value) || 0;
+    const golesVisitante = Number(document.getElementById('golesVisitante').value) || 0;
+
+    await db.collection('actas').doc(partidoId).set({
+      partidoId,
+      arbitroUid: currentUser.uid,
+      arbitroNombre: currentProfile.nombre,
+      incidencias: actaIncidenciasTemp,
+      golesLocal, golesVisitante,
+      validadoLocal: false,
+      validadoVisitante: false,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, {merge:true});
+
+    await db.collection('partidos').doc(partidoId).update({
+      estado: 'jugado', golesLocal, golesVisitante
+    });
+
+    toast('Acta guardada y enviada a validación', 'success');
+    renderMisActas();
+  }catch(e){
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+/* =========================================================================
+   VIEW: VALIDACIONES (delegado / liga_admin)
+   ========================================================================= */
+async function renderValidaciones(){
+  const c = document.getElementById('content');
+  c.innerHTML = `<h2>Validaciones</h2><p class="page-sub">Actas de partidos pendientes de confirmar</p><div id="valArea"><div class="loader"></div></div>`;
+  try{
+    const partidosSnap = await db.collection('partidos').where('estado','==','jugado').get();
+    const area = document.getElementById('valArea');
+    if(partidosSnap.empty){ area.innerHTML = '<div class="empty-state">No hay actas pendientes de validación.</div>'; return; }
+
+    const isDelegado = currentProfile.rol === ROLES.DELEGADO;
+    const cards = [];
+    for(const pDoc of partidosSnap.docs){
+      const p = pDoc.data();
+      if(isDelegado && p.equipoLocalId !== currentProfile.equipoId && p.equipoVisitanteId !== currentProfile.equipoId) continue;
+
+      const actaDoc = await db.collection('actas').doc(pDoc.id).get();
+      if(!actaDoc.exists) continue;
+      const acta = actaDoc.data();
+      const [local, visitante] = await Promise.all([getEquipoNombre(p.equipoLocalId), getEquipoNombre(p.equipoVisitanteId)]);
+
+      const iconMap = {gol:'⚽', amarilla:'▮', roja:'▮', otro:'i'};
+      const incRows = (acta.incidencias||[]).map(inc => `
+        <div class="incident-row">
+          <span class="incident-min">${inc.minuto}'</span>
+          <span class="incident-icon icon-${inc.tipo}">${iconMap[inc.tipo]}</span>
+          <span style="flex:1;">#${inc.jugadorNumero ?? '-'} ${escapeHtml(inc.jugadorNombre)} ${inc.detalle ? '— '+escapeHtml(inc.detalle) : ''}</span>
+        </div>`).join('') || '<div class="empty-state" style="padding:16px;">Sin incidencias.</div>';
+
+      let miValidacionBoton = '';
+      if(isDelegado){
+        const esLocal = p.equipoLocalId === currentProfile.equipoId;
+        const yaValide = esLocal ? acta.validadoLocal : acta.validadoVisitante;
+        miValidacionBoton = yaValide
+          ? `<span class="badge badge-aprobado">Ya validaste esta acta</span>`
+          : `<button class="btn btn-primary btn-sm" onclick="validarActa('${pDoc.id}', ${esLocal})">Validar acta</button>
+             <button class="btn btn-secondary btn-sm" onclick="objetarActa('${pDoc.id}')">Objetar</button>`;
+      }
+
+      cards.push(`
+        <div class="acta-card">
+          <div class="acta-head">
+            <div>
+              <div class="jornada">Jornada ${p.jornada ?? '—'} · Árbitro: ${escapeHtml(acta.arbitroNombre||'—')}</div>
+              <div class="matchup">${escapeHtml(local)} ${acta.golesLocal ?? 0} — ${acta.golesVisitante ?? 0} ${escapeHtml(visitante)}</div>
+            </div>
+            <span class="acta-status ${acta.validadoLocal && acta.validadoVisitante ? 'status-validado' : 'status-pendiente'}">
+              ${acta.validadoLocal && acta.validadoVisitante ? 'Ambos validaron' : `Local: ${acta.validadoLocal?'✓':'—'} · Visitante: ${acta.validadoVisitante?'✓':'—'}`}
+            </span>
+          </div>
+          <div class="acta-body">
+            ${incRows}
+            <div style="margin-top:14px; display:flex; gap:8px;">${miValidacionBoton}</div>
+          </div>
+        </div>
+      `);
+    }
+    area.innerHTML = cards.join('') || '<div class="empty-state">No hay actas pendientes para tu equipo.</div>';
+  }catch(e){
+    document.getElementById('valArea').innerHTML = `<div class="empty-state">Error: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+async function validarActa(partidoId, esLocal){
+  try{
+    const field = esLocal ? 'validadoLocal' : 'validadoVisitante';
+    await db.collection('actas').doc(partidoId).update({ [field]: true });
+
+    const actaDoc = await db.collection('actas').doc(partidoId).get();
+    const acta = actaDoc.data();
+    if(acta.validadoLocal && acta.validadoVisitante){
+      await db.collection('partidos').doc(partidoId).update({ estado: 'validado' });
+      toast('Acta validada por ambos equipos — queda oficial', 'success');
+    }else{
+      toast('Validación registrada, falta el otro equipo', 'success');
+    }
+    renderValidaciones();
+  }catch(e){
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+async function objetarActa(partidoId){
+  const motivo = prompt('Describí brevemente la objeción (el árbitro deberá corregir el acta):');
+  if(motivo === null) return;
+  try{
+    await db.collection('partidos').doc(partidoId).update({ estado: 'jugado', enDisputa: true });
+    await db.collection('actas').doc(partidoId).update({
+      objeciones: firebase.firestore.FieldValue.arrayUnion({
+        motivo, por: currentProfile.nombre, equipoId: currentProfile.equipoId,
+        fecha: new Date().toISOString()
+      })
+    });
+    toast('Objeción registrada', 'success');
+    renderValidaciones();
+  }catch(e){
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+/* =========================================================================
+   VIEW: ESTADÍSTICAS
+   ========================================================================= */
+async function renderEstadisticas(){
+  const c = document.getElementById('content');
+  c.innerHTML = `<h2>Estadísticas</h2><p class="page-sub">Calculadas a partir de actas oficiales (validadas por ambos equipos)</p><div id="statsArea"><div class="loader"></div></div>`;
+  try{
+    const [partidosSnap, equiposSnap] = await Promise.all([
+      db.collection('partidos').where('estado','==','validado').get(),
+      db.collection('equipos').get()
+    ]);
+    const equiposInfo = {};
+    equiposSnap.docs.forEach(d => equiposInfo[d.id] = { nombre: d.data().nombre, pj:0, pg:0, pe:0, pp:0, gf:0, gc:0, pts:0 });
+
+    const goleadores = {};
+    const tarjetas = {};
+
+    for(const pDoc of partidosSnap.docs){
+      const p = pDoc.data();
+      const local = equiposInfo[p.equipoLocalId], vis = equiposInfo[p.equipoVisitanteId];
+      if(!local || !vis) continue;
+      const gl = p.golesLocal||0, gv = p.golesVisitante||0;
+      local.pj++; vis.pj++;
+      local.gf += gl; local.gc += gv;
+      vis.gf += gv; vis.gc += gl;
+      if(gl > gv){ local.pg++; local.pts+=3; vis.pp++; }
+      else if(gl < gv){ vis.pg++; vis.pts+=3; local.pp++; }
+      else { local.pe++; vis.pe++; local.pts++; vis.pts++; }
+
+      const actaDoc = await db.collection('actas').doc(pDoc.id).get();
+      if(actaDoc.exists){
+        (actaDoc.data().incidencias||[]).forEach(inc => {
+          const key = inc.jugadorId;
+          if(inc.tipo === 'gol'){
+            goleadores[key] = goleadores[key] || {nombre: inc.jugadorNombre, numero: inc.jugadorNumero, goles:0};
+            goleadores[key].goles++;
+          }
+          if(inc.tipo === 'amarilla' || inc.tipo === 'roja'){
+            tarjetas[key] = tarjetas[key] || {nombre: inc.jugadorNombre, numero: inc.jugadorNumero, amarillas:0, rojas:0};
+            if(inc.tipo==='amarilla') tarjetas[key].amarillas++; else tarjetas[key].rojas++;
+          }
+        });
+      }
+    }
+
+    const tabla = Object.values(equiposInfo).sort((a,b)=> b.pts-a.pts || (b.gf-b.gc)-(a.gf-a.gc));
+    const tablaHtml = `
+      <table class="stats-table">
+        <thead><tr><th>Equipo</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th><th>GF</th><th>GC</th><th>Pts</th></tr></thead>
+        <tbody>${tabla.map(e=>`<tr><td>${escapeHtml(e.nombre)}</td><td>${e.pj}</td><td>${e.pg}</td><td>${e.pe}</td><td>${e.pp}</td><td>${e.gf}</td><td>${e.gc}</td><td><b>${e.pts}</b></td></tr>`).join('')}</tbody>
+      </table>`;
+
+    const golHtml = Object.values(goleadores).sort((a,b)=>b.goles-a.goles).slice(0,10)
+      .map(g=>`<tr><td>#${g.numero??'-'} ${escapeHtml(g.nombre)}</td><td>${g.goles}</td></tr>`).join('') || '<tr><td colspan="2">Sin goles registrados</td></tr>';
+
+    const tarjHtml = Object.values(tarjetas).sort((a,b)=>(b.rojas*2+b.amarillas)-(a.rojas*2+a.amarillas)).slice(0,10)
+      .map(t=>`<tr><td>#${t.numero??'-'} ${escapeHtml(t.nombre)}</td><td>${t.amarillas}</td><td>${t.rojas}</td></tr>`).join('') || '<tr><td colspan="3">Sin tarjetas registradas</td></tr>';
+
+    document.getElementById('statsArea').innerHTML = `
+      <div class="card"><h3 style="font-family:var(--eyebrow); text-transform:uppercase; font-size:13px; color:var(--ink-soft); margin-bottom:10px;">Tabla de posiciones</h3>${tablaHtml}</div>
+      <div class="card"><h3 style="font-family:var(--eyebrow); text-transform:uppercase; font-size:13px; color:var(--ink-soft); margin-bottom:10px;">Goleadores</h3>
+        <table class="stats-table"><thead><tr><th>Jugador</th><th>Goles</th></tr></thead><tbody>${golHtml}</tbody></table></div>
+      <div class="card"><h3 style="font-family:var(--eyebrow); text-transform:uppercase; font-size:13px; color:var(--ink-soft); margin-bottom:10px;">Tarjetas</h3>
+        <table class="stats-table"><thead><tr><th>Jugador</th><th>Amarillas</th><th>Rojas</th></tr></thead><tbody>${tarjHtml}</tbody></table></div>
+    `;
+  }catch(e){
+    document.getElementById('statsArea').innerHTML = `<div class="empty-state">Error: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+/* =========================================================================
+   VIEW: USUARIOS (liga_admin) — aprobación general
+   ========================================================================= */
+async function renderUsuarios(){
+  const c = document.getElementById('content');
+  c.innerHTML = `<h2>Usuarios</h2><p class="page-sub">Todas las cuentas del sistema</p><div id="usrArea"><div class="loader"></div></div>`;
+  try{
+    const snap = await db.collection('users').orderBy('createdAt','desc').get();
+    const area = document.getElementById('usrArea');
+    if(snap.empty){ area.innerHTML = '<div class="empty-state">Sin usuarios.</div>'; return; }
+    area.innerHTML = (await Promise.all(snap.docs.map(async d => {
+      const u = d.data();
+      const eqNombre = u.equipoId ? await getEquipoNombre(u.equipoId) : '—';
+      return `<div class="card" style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-weight:600;">${escapeHtml(u.nombre)} <span class="badge">${ROLE_LABELS[u.rol]}</span></div>
+          <div class="tmeta" style="font-family:var(--eyebrow); font-size:12.5px; color:var(--ink-soft);">${escapeHtml(u.email)} · ${escapeHtml(eqNombre)}</div>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <span class="badge ${u.estado==='aprobado'?'badge-aprobado':'badge-pendiente'}">${u.estado}</span>
+          ${u.estado==='pendiente' ? `<button class="btn btn-sm btn-primary" onclick="aprobarUsuario('${d.id}')">Aprobar</button>` : ''}
+        </div>
+      </div>`;
+    }))).join('');
+  }catch(e){
+    document.getElementById('usrArea').innerHTML = `<div class="empty-state">Error: ${escapeHtml(e.message)}</div>`;
+  }
+}
+async function aprobarUsuario(uid){
+  try{
+    await db.collection('users').doc(uid).update({estado:'aprobado'});
+    toast('Usuario aprobado', 'success');
+    if(currentView==='usuarios') renderUsuarios(); else renderMiPlantilla();
+  }catch(e){ toast('Error: '+e.message, 'error'); }
+}
+
+/* =========================================================================
+   BOOT
+   ========================================================================= */
+initFirebase();
+</script>
+</body>
+</html>
