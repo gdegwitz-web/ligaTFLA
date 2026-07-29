@@ -801,26 +801,31 @@ async function verEquipo(equipoId){
   try{
     const eqDoc = await db.collection('equipos').doc(equipoId).get();
     const eq = eqDoc.data();
-    const jugSnap = await db.collection('jugadores').where('equipoId','==',equipoId).orderBy('numero').get();
-    const rows = jugSnap.docs.map(d => {
-      const j = d.data();
-      return `<tr>
+    const jugSnap = await db.collection('jugadores').where('equipoId','==',equipoId).get();
+    const jugadores = jugSnap.docs.map(d => ({id:d.id, ...d.data()})).sort(ordenarPlantilla);
+    const puedeEditar = puedeGestionarEquipo(equipoId);
+
+    const rows = jugadores.map(j => `<tr>
         <td>${j.numero ?? '—'}</td>
         <td>${escapeHtml(j.nombre || '')}</td>
         <td>${escapeHtml(j.posicion || '—')}</td>
-        <td><span class="badge ${j.estado==='aprobado'?'badge-aprobado':'badge-pendiente'}">${j.estado==='aprobado'?'Ficha completa':'Pendiente'}</span></td>
-      </tr>`;
-    }).join('');
+        ${puedeEditar ? `<td style="text-align:right; white-space:nowrap;">
+          <button class="link-btn" style="font-size:13px;" onclick="openJugadorModal('${equipoId}','${j.id}')">Editar</button>
+          <button class="link-btn" style="font-size:13px; color:var(--card-red); margin-left:10px;" onclick="eliminarJugador('${j.id}','${equipoId}')">Eliminar</button>
+        </td>` : ''}
+      </tr>`).join('');
+
     document.getElementById('content').innerHTML = `
       <button class="link-btn" onclick="routeTo('equipos')">← Volver a equipos</button>
       <h2 style="margin-top:14px;">${escapeHtml(eq.nombre)}</h2>
-      <p class="page-sub">Plantilla del equipo</p>
+      <p class="page-sub">Plantilla del equipo · ${jugadores.length} jugador${jugadores.length===1?'':'es'}</p>
+      ${puedeEditar ? `<button class="btn btn-primary" style="margin-bottom:16px;" onclick="openJugadorModal('${equipoId}')">+ Agregar jugador</button>` : ''}
       <div class="card">
-        ${jugSnap.empty ? '<div class="empty-state">Sin jugadores registrados todavía.</div>' : `
-        <table class="stats-table">
-          <thead><tr><th>#</th><th>Nombre</th><th>Posición</th><th>Estado</th></tr></thead>
+        ${jugadores.length === 0 ? '<div class="empty-state">Sin jugadores registrados todavía.</div>' : `
+        <div class="table-scroll"><table class="stats-table">
+          <thead><tr><th>#</th><th>Nombre</th><th>Posición</th>${puedeEditar?'<th></th>':''}</tr></thead>
           <tbody>${rows}</tbody>
-        </table>`}
+        </table></div>`}
       </div>
     `;
   }catch(e){
@@ -848,7 +853,7 @@ async function renderMiPlantilla(){
   try{
     const [pendSnap, apSnap] = await Promise.all([
       db.collection('users').where('equipoId','==',currentProfile.equipoId).where('estado','==','pendiente').get(),
-      db.collection('jugadores').where('equipoId','==',currentProfile.equipoId).orderBy('nombre').get()
+      db.collection('jugadores').where('equipoId','==',currentProfile.equipoId).get()
     ]);
 
     const pendArea = document.getElementById('pendientesArea');
@@ -874,18 +879,21 @@ async function renderMiPlantilla(){
     }
 
     const plArea = document.getElementById('plantillaArea');
+    const jugadores = apSnap.docs.map(d => ({id:d.id, ...d.data()})).sort(ordenarPlantilla);
     plArea.innerHTML = `
-      <h3 style="font-family:var(--eyebrow); text-transform:uppercase; font-size:13px; color:var(--ink-soft); margin-bottom:10px;">Plantilla (${apSnap.size})</h3>
-      ${apSnap.empty ? '<div class="empty-state">Todavía no hay fichas de jugador completas.</div>' : apSnap.docs.map(d => {
-        const j = d.data();
-        return `<div class="card" style="display:flex; justify-content:space-between; align-items:center;">
+      <div class="section-title">Plantilla (${jugadores.length})</div>
+      <button class="btn btn-primary" style="margin-bottom:14px;" onclick="openJugadorModal('${currentProfile.equipoId}')">+ Agregar jugador</button>
+      ${jugadores.length === 0 ? '<div class="empty-state">Todavía no hay jugadores en la plantilla. Puedes agregarlos tú mismo o esperar a que cada jugador complete su ficha.</div>' : jugadores.map(j => `
+        <div class="card" style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
           <div>
             <div style="font-weight:600;">#${j.numero ?? '—'} · ${escapeHtml(j.nombre)}</div>
-            <div class="tmeta" style="font-family:var(--eyebrow); font-size:12.5px; color:var(--ink-soft);">${escapeHtml(j.posicion || '')}</div>
+            <div style="font-family:var(--eyebrow); font-size:12.5px; color:var(--ink-soft);">${escapeHtml(j.posicion || '')}</div>
           </div>
-          <span class="badge badge-aprobado">Completa</span>
-        </div>`;
-      }).join('')}
+          <div style="white-space:nowrap;">
+            <button class="link-btn" style="font-size:13px;" onclick="openJugadorModal('${currentProfile.equipoId}','${j.id}')">Editar</button>
+            <button class="link-btn" style="font-size:13px; color:var(--card-red); margin-left:10px;" onclick="eliminarJugador('${j.id}','${currentProfile.equipoId}')">Eliminar</button>
+          </div>
+        </div>`).join('')}
     `;
   }catch(e){
     c.innerHTML += `<div class="empty-state">Error: ${escapeHtml(e.message)}</div>`;
@@ -983,33 +991,16 @@ async function guardarFicha(existingId){
 async function renderCalendario(){
   const c = document.getElementById('content');
   c.innerHTML = `<h2>Calendario</h2><p class="page-sub">Partidos del torneo</p><div id="calArea"><div class="loader"></div></div>`;
-  try{
-    const snap = await db.collection('partidos').orderBy('fecha').get();
-    const area = document.getElementById('calArea');
-    if(snap.empty){ area.innerHTML = '<div class="empty-state">Todavía no hay partidos programados.</div>'; return; }
-
-    const rows = await Promise.all(snap.docs.map(async d => {
-      const p = d.data();
-      const [local, visitante] = await Promise.all([getEquipoNombre(p.equipoLocalId), getEquipoNombre(p.equipoVisitanteId)]);
-      const fecha = p.fecha ? new Date(p.fecha).toLocaleString('es-VE', {dateStyle:'medium', timeStyle:'short'}) : '—';
-      return `<div class="acta-card">
-        <div class="acta-head">
-          <div>
-            <div class="jornada">Jornada ${p.jornada ?? '—'} · ${fecha}</div>
-            <div class="matchup">${escapeHtml(local)} vs ${escapeHtml(visitante)}</div>
-          </div>
-          <span class="acta-status status-${p.estado||'programado'}">${estadoLabel(p.estado)}</span>
-        </div>
-        ${p.estado === 'jugado' || p.estado === 'validado' ? `<div class="acta-body" style="font-family:var(--display); font-size:20px; text-align:center;">${p.golesLocal ?? 0} — ${p.golesVisitante ?? 0}</div>` : ''}
-      </div>`;
-    }));
-    area.innerHTML = rows.join('');
-  }catch(e){
-    document.getElementById('calArea').innerHTML = `<div class="empty-state">Error: ${escapeHtml(e.message)}</div>`;
-  }
+  await renderCalendarioInto('calArea', false);
 }
-function estadoLabel(estado){
+function estadoLabel(p){
+  const estado = (typeof p === 'string') ? p : (p && p.estado);
+  if(p && typeof p === 'object' && p.enDisputa && estado !== 'validado') return 'En disputa';
   return {programado:'Programado', jugado:'Jugado · sin validar', validado:'Oficial'}[estado] || 'Programado';
+}
+function estadoClase(p){
+  if(p.enDisputa && p.estado !== 'validado') return 'disputa';
+  return p.estado || 'programado';
 }
 
 /* =========================================================================
@@ -1019,34 +1010,64 @@ async function renderPartidosAdmin(){
   const c = document.getElementById('content');
   c.innerHTML = `
     <h2>Partidos</h2>
-    <p class="page-sub">Programación del torneo</p>
+    <p class="page-sub">Programación del torneo · desde aquí se edita cada partido y se carga su acta</p>
     <button class="btn btn-primary" style="margin-bottom:18px;" onclick="openNuevoPartidoModal()">+ Programar partido</button>
     <div id="calArea"><div class="loader"></div></div>
   `;
-  await renderCalendarioInto('calArea');
+  await renderCalendarioInto('calArea', true);
 }
-async function renderCalendarioInto(containerId){
+
+async function renderCalendarioInto(containerId, conAcciones){
   try{
-    const snap = await db.collection('partidos').orderBy('fecha').get();
+    const snap = await db.collection('partidos').get();
     const area = document.getElementById(containerId);
+    if(!area) return;
     if(snap.empty){ area.innerHTML = '<div class="empty-state">Todavía no hay partidos programados.</div>'; return; }
-    const rows = await Promise.all(snap.docs.map(async d => {
-      const p = d.data();
+
+    const partidos = snap.docs.map(d => ({id:d.id, ...d.data()}))
+      .sort((a,b) => (a.fecha||'').localeCompare(b.fecha||''));
+
+    const rows = await Promise.all(partidos.map(async p => {
       const [local, visitante] = await Promise.all([getEquipoNombre(p.equipoLocalId), getEquipoNombre(p.equipoVisitanteId)]);
-      const fecha = p.fecha ? new Date(p.fecha).toLocaleString('es-VE', {dateStyle:'medium', timeStyle:'short'}) : '—';
+      const fecha = p.fecha ? new Date(p.fecha).toLocaleString('es-VE', {dateStyle:'medium', timeStyle:'short'}) : 'Sin fecha';
+      const tieneActa = p.estado === 'jugado' || p.estado === 'validado';
+      const marcador = tieneActa
+        ? `<div class="acta-body" style="font-family:var(--display); font-weight:900; font-size:22px; text-align:center; padding:14px 18px;">${p.golesLocal ?? 0} — ${p.golesVisitante ?? 0}</div>`
+        : '';
+
+      let acciones = '';
+      if(conAcciones){
+        // El arbitro carga actas; solo el administrador de liga edita o elimina partidos.
+        const esAdmin = currentProfile.rol === ROLES.LIGA_ADMIN;
+        acciones = `<div class="acta-body" style="display:flex; gap:8px; flex-wrap:wrap; ${tieneActa?'border-top:1px dashed var(--bone-dim);':''}">
+          <button class="btn btn-sm ${p.estado==='programado'?'btn-primary':'btn-secondary'}" onclick="abrirActaForm('${p.id}')">
+            ${p.estado === 'programado' ? 'Cargar acta' : 'Ver / editar acta'}
+          </button>
+          ${esAdmin ? `
+          <button class="btn btn-sm btn-secondary" onclick="openEditarPartidoModal('${p.id}')">Editar partido</button>
+          <button class="btn btn-sm btn-secondary" style="color:var(--card-red); border-color:var(--card-red);" onclick="eliminarPartido('${p.id}')">Eliminar</button>` : ''}
+        </div>`;
+      }else if(tieneActa){
+        acciones = `<div class="acta-body" style="border-top:1px dashed var(--bone-dim);">
+          <button class="btn btn-sm btn-secondary" onclick="verActaDetalle('${p.id}')">Ver acta del partido</button>
+        </div>`;
+      }
+
       return `<div class="acta-card">
         <div class="acta-head">
           <div>
-            <div class="jornada">Jornada ${p.jornada ?? '—'} · ${fecha}</div>
+            <div class="jornada">Jornada ${p.jornada ?? '—'} · ${fecha}${p.cancha ? ' · ' + escapeHtml(p.cancha) : ''}</div>
             <div class="matchup">${escapeHtml(local)} vs ${escapeHtml(visitante)}</div>
           </div>
-          <span class="acta-status status-${p.estado||'programado'}">${estadoLabel(p.estado)}</span>
+          <span class="acta-status status-${estadoClase(p)}">${estadoLabel(p)}</span>
         </div>
+        ${marcador}${acciones}
       </div>`;
     }));
     area.innerHTML = rows.join('');
   }catch(e){
-    document.getElementById(containerId).innerHTML = `<div class="empty-state">Error: ${escapeHtml(e.message)}</div>`;
+    const area = document.getElementById(containerId);
+    if(area) area.innerHTML = `<div class="empty-state">Error: ${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -1095,34 +1116,8 @@ async function crearPartido(){
    ========================================================================= */
 async function renderMisActas(){
   const c = document.getElementById('content');
-  c.innerHTML = `<h2>Mis actas</h2><p class="page-sub">Partidos programados — completa el acta al finalizar</p><div id="actasArea"><div class="loader"></div></div>`;
-  try{
-    const snap = await db.collection('partidos').orderBy('fecha').get();
-    const area = document.getElementById('actasArea');
-    if(snap.empty){ area.innerHTML = '<div class="empty-state">No hay partidos programados.</div>'; return; }
-    const rows = await Promise.all(snap.docs.map(async d => {
-      const p = d.data();
-      const [local, visitante] = await Promise.all([getEquipoNombre(p.equipoLocalId), getEquipoNombre(p.equipoVisitanteId)]);
-      const fecha = p.fecha ? new Date(p.fecha).toLocaleString('es-VE', {dateStyle:'medium', timeStyle:'short'}) : '—';
-      return `<div class="acta-card">
-        <div class="acta-head">
-          <div>
-            <div class="jornada">Jornada ${p.jornada ?? '—'} · ${fecha}</div>
-            <div class="matchup">${escapeHtml(local)} vs ${escapeHtml(visitante)}</div>
-          </div>
-          <span class="acta-status status-${p.estado||'programado'}">${estadoLabel(p.estado)}</span>
-        </div>
-        <div class="acta-body">
-          <button class="btn btn-sm ${p.estado==='programado' ? 'btn-primary' : 'btn-secondary'}" onclick="abrirActaForm('${d.id}')">
-            ${p.estado === 'programado' ? 'Llenar acta' : 'Ver / editar acta'}
-          </button>
-        </div>
-      </div>`;
-    }));
-    area.innerHTML = rows.join('');
-  }catch(e){
-    document.getElementById('actasArea').innerHTML = `<div class="empty-state">Error: ${escapeHtml(e.message)}</div>`;
-  }
+  c.innerHTML = `<h2>Actas</h2><p class="page-sub">Carga el acta de cada partido que arbitras: goles, tarjetas e incidencias</p><div id="calArea"><div class="loader"></div></div>`;
+  await renderCalendarioInto('calArea', true);
 }
 
 let actaIncidenciasTemp = [];
@@ -1150,10 +1145,28 @@ async function abrirActaForm(partidoId){
     .filter(([id,j]) => j.equipoLado === lado)
     .map(([id,j]) => `<option value="${id}">#${j.numero??'-'} ${escapeHtml(j.nombre)}</option>`).join('');
 
+  const faltanJugadores = [];
+  if(jugLocalSnap.empty) faltanJugadores.push(local);
+  if(jugVisSnap.empty) faltanJugadores.push(visitante);
+
   c.innerHTML = `
-    <button class="link-btn" onclick="renderMisActas()">← Volver</button>
+    <button class="link-btn" onclick="routeTo(currentView)">← Volver</button>
     <h2 style="margin-top:14px;">${escapeHtml(local)} vs ${escapeHtml(visitante)}</h2>
     <p class="page-sub">Jornada ${p.jornada ?? '—'}</p>
+
+    ${faltanJugadores.length ? `<div class="card" style="border-left:4px solid var(--card-yellow);">
+      <div class="section-title">Falta cargar la plantilla</div>
+      <p style="font-size:14px; line-height:1.6;">
+        ${faltanJugadores.length === 2
+          ? `Ni ${escapeHtml(faltanJugadores[0])} ni ${escapeHtml(faltanJugadores[1])} tienen jugadores registrados.`
+          : `${escapeHtml(faltanJugadores[0])} todavía no tiene jugadores registrados.`}
+        Puedes guardar el marcador, pero para registrar goles y tarjetas hace falta que los jugadores estén en la plantilla.
+      </p>
+      <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
+        ${jugLocalSnap.empty ? `<button class="btn btn-sm btn-secondary" onclick="verEquipo('${p.equipoLocalId}')">Cargar plantilla de ${escapeHtml(local)}</button>` : ''}
+        ${jugVisSnap.empty ? `<button class="btn btn-sm btn-secondary" onclick="verEquipo('${p.equipoVisitanteId}')">Cargar plantilla de ${escapeHtml(visitante)}</button>` : ''}
+      </div>
+    </div>` : ''}
 
     <div class="card">
       <div class="field-row">
@@ -1235,11 +1248,10 @@ function renderIncidenciasList(){
     list.innerHTML = '<div class="empty-state" style="padding:20px;">Sin incidencias registradas todavía.</div>';
     return;
   }
-  const iconMap = {gol:'⚽', amarilla:'▮', roja:'▮', otro:'i'};
   list.innerHTML = actaIncidenciasTemp.map((inc,idx) => `
     <div class="incident-row">
       <span class="incident-min">${inc.minuto}'</span>
-      <span class="incident-icon icon-${inc.tipo}">${iconMap[inc.tipo]}</span>
+      <span class="incident-icon icon-${inc.tipo}">${ICONOS_INCIDENCIA[inc.tipo]||'i'}</span>
       <span style="flex:1;">#${inc.jugadorNumero ?? '-'} ${escapeHtml(inc.jugadorNombre)} ${inc.detalle ? '— '+escapeHtml(inc.detalle) : ''}</span>
       <button class="link-btn" style="font-size:12px;" onclick="quitarIncidencia(${idx})">quitar</button>
     </div>
@@ -1278,7 +1290,10 @@ async function guardarActa(partidoId){
    ========================================================================= */
 async function renderValidaciones(){
   const c = document.getElementById('content');
-  c.innerHTML = `<h2>Validaciones</h2><p class="page-sub">Actas de partidos pendientes de confirmar</p><div id="valArea"><div class="loader"></div></div>`;
+  const esAdmin = currentProfile.rol === ROLES.LIGA_ADMIN;
+  c.innerHTML = `<h2>Validaciones</h2>
+    <p class="page-sub">${esAdmin ? 'Actas pendientes de los dos delegados. Como administrador puedes validar en nombre de un equipo si hace falta.' : 'Actas de partidos pendientes de confirmar'}</p>
+    <div id="valArea"><div class="loader"></div></div>`;
   try{
     const partidosSnap = await db.collection('partidos').where('estado','==','jugado').get();
     const area = document.getElementById('valArea');
@@ -1295,13 +1310,7 @@ async function renderValidaciones(){
       const acta = actaDoc.data();
       const [local, visitante] = await Promise.all([getEquipoNombre(p.equipoLocalId), getEquipoNombre(p.equipoVisitanteId)]);
 
-      const iconMap = {gol:'⚽', amarilla:'▮', roja:'▮', otro:'i'};
-      const incRows = (acta.incidencias||[]).map(inc => `
-        <div class="incident-row">
-          <span class="incident-min">${inc.minuto}'</span>
-          <span class="incident-icon icon-${inc.tipo}">${iconMap[inc.tipo]}</span>
-          <span style="flex:1;">#${inc.jugadorNumero ?? '-'} ${escapeHtml(inc.jugadorNombre)} ${inc.detalle ? '— '+escapeHtml(inc.detalle) : ''}</span>
-        </div>`).join('') || '<div class="empty-state" style="padding:16px;">Sin incidencias.</div>';
+      const incRows = renderIncidenciasHtml(acta.incidencias, local, visitante);
 
       let miValidacionBoton = '';
       if(isDelegado){
@@ -1311,6 +1320,16 @@ async function renderValidaciones(){
           ? `<span class="badge badge-aprobado">Ya validaste esta acta</span>`
           : `<button class="btn btn-primary btn-sm" onclick="validarActa('${pDoc.id}', ${esLocal})">Validar acta</button>
              <button class="btn btn-secondary btn-sm" onclick="objetarActa('${pDoc.id}')">Objetar</button>`;
+      }else if(currentProfile.rol === ROLES.LIGA_ADMIN){
+        // Override de administrador: sirve para probar el flujo y para cuando
+        // un delegado no aparece. Queda registrado quien valido.
+        miValidacionBoton = `
+          <button class="btn btn-sm ${acta.validadoLocal?'btn-secondary':'btn-primary'}" ${acta.validadoLocal?'disabled':''} onclick="validarActa('${pDoc.id}', true)">
+            ${acta.validadoLocal ? '✓ ' + escapeHtml(local) : 'Validar por ' + escapeHtml(local)}
+          </button>
+          <button class="btn btn-sm ${acta.validadoVisitante?'btn-secondary':'btn-primary'}" ${acta.validadoVisitante?'disabled':''} onclick="validarActa('${pDoc.id}', false)">
+            ${acta.validadoVisitante ? '✓ ' + escapeHtml(visitante) : 'Validar por ' + escapeHtml(visitante)}
+          </button>`;
       }
 
       cards.push(`
@@ -1340,7 +1359,12 @@ async function renderValidaciones(){
 async function validarActa(partidoId, esLocal){
   try{
     const field = esLocal ? 'validadoLocal' : 'validadoVisitante';
-    await db.collection('actas').doc(partidoId).update({ [field]: true });
+    const porField = esLocal ? 'validadoLocalPor' : 'validadoVisitantePor';
+    await db.collection('actas').doc(partidoId).update({
+      [field]: true,
+      [porField]: currentProfile.nombre + (currentProfile.rol === ROLES.LIGA_ADMIN ? ' (admin)' : ''),
+      [porField + 'Fecha']: new Date().toISOString()
+    });
 
     const actaDoc = await db.collection('actas').doc(partidoId).get();
     const acta = actaDoc.data();
@@ -1478,6 +1502,233 @@ async function aprobarUsuario(uid){
     toast('Usuario aprobado', 'success');
     if(currentView==='usuarios') renderUsuarios(); else renderMiPlantilla();
   }catch(e){ toast('Error: '+e.message, 'error'); }
+}
+
+/* =========================================================================
+   GESTIÓN DE JUGADORES (alta manual por delegado o administrador de liga)
+   ========================================================================= */
+function puedeGestionarEquipo(equipoId){
+  if(!currentProfile) return false;
+  if(currentProfile.rol === ROLES.LIGA_ADMIN) return true;
+  return currentProfile.rol === ROLES.DELEGADO && currentProfile.equipoId === equipoId;
+}
+
+function ordenarPlantilla(a, b){
+  const na = (a.numero === null || a.numero === undefined) ? 9999 : a.numero;
+  const nb = (b.numero === null || b.numero === undefined) ? 9999 : b.numero;
+  if(na !== nb) return na - nb;
+  return (a.nombre || '').localeCompare(b.nombre || '');
+}
+
+const POSICIONES = ['Portero','Defensa','Mediocampista','Delantero'];
+
+async function openJugadorModal(equipoId, jugadorId){
+  let j = {};
+  if(jugadorId){
+    const doc = await db.collection('jugadores').doc(jugadorId).get();
+    if(doc.exists) j = doc.data();
+  }
+  openModal(`
+    <h3>${jugadorId ? 'Editar jugador' : 'Agregar jugador'}</h3>
+    <div class="field"><label>Nombre completo</label><input id="jmNombre" value="${escapeHtml(j.nombre||'')}" placeholder="Nombre y apellido"></div>
+    <div class="field-row">
+      <div class="field"><label>Número de camiseta</label><input type="number" id="jmNumero" value="${j.numero ?? ''}"></div>
+      <div class="field"><label>Posición</label>
+        <select id="jmPosicion">${POSICIONES.map(p=>`<option ${j.posicion===p?'selected':''}>${p}</option>`).join('')}</select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Cédula / documento</label><input id="jmCedula" value="${escapeHtml(j.cedula||'')}"></div>
+      <div class="field"><label>Teléfono</label><input id="jmTelefono" value="${escapeHtml(j.telefono||'')}"></div>
+    </div>
+    <div class="field"><label>Fecha de nacimiento</label><input type="date" id="jmFecha" value="${j.fechaNacimiento||''}"></div>
+    <div class="auth-note">Solo el nombre es obligatorio. El jugador puede completar el resto de su ficha después, entrando con su propia cuenta.</div>
+    <button class="btn btn-primary btn-block" onclick="guardarJugadorManual('${equipoId}','${jugadorId||''}')">${jugadorId ? 'Guardar cambios' : 'Agregar a la plantilla'}</button>
+  `);
+}
+
+async function guardarJugadorManual(equipoId, jugadorId){
+  const nombre = document.getElementById('jmNombre').value.trim();
+  if(!nombre){ toast('El nombre es obligatorio', 'error'); return; }
+  const numeroRaw = document.getElementById('jmNumero').value;
+  const data = {
+    equipoId,
+    nombre,
+    numero: numeroRaw === '' ? null : Number(numeroRaw),
+    posicion: document.getElementById('jmPosicion').value,
+    cedula: document.getElementById('jmCedula').value.trim(),
+    telefono: document.getElementById('jmTelefono').value.trim(),
+    fechaNacimiento: document.getElementById('jmFecha').value,
+    estado: 'aprobado',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  try{
+    if(jugadorId){
+      await db.collection('jugadores').doc(jugadorId).update(data);
+      toast('Jugador actualizado', 'success');
+    }else{
+      data.uid = null; // cargado a mano; se vincula si el jugador crea su cuenta
+      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      await db.collection('jugadores').add(data);
+      await db.collection('equipos').doc(equipoId).update({
+        jugadoresCount: firebase.firestore.FieldValue.increment(1)
+      }).catch(()=>{});
+      toast('Jugador agregado', 'success');
+    }
+    closeModal();
+    refrescarVistaPlantilla(equipoId);
+  }catch(e){
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+async function eliminarJugador(jugadorId, equipoId){
+  if(!confirm('¿Eliminar este jugador de la plantilla?')) return;
+  try{
+    await db.collection('jugadores').doc(jugadorId).delete();
+    await db.collection('equipos').doc(equipoId).update({
+      jugadoresCount: firebase.firestore.FieldValue.increment(-1)
+    }).catch(()=>{});
+    toast('Jugador eliminado');
+    refrescarVistaPlantilla(equipoId);
+  }catch(e){
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+function refrescarVistaPlantilla(equipoId){
+  if(currentView === 'miplantilla') renderMiPlantilla();
+  else verEquipo(equipoId);
+}
+
+/* =========================================================================
+   EDICIÓN Y BORRADO DE PARTIDOS (administrador de liga)
+   ========================================================================= */
+async function openEditarPartidoModal(partidoId){
+  const [pDoc, eqSnap] = await Promise.all([
+    db.collection('partidos').doc(partidoId).get(),
+    db.collection('equipos').get()
+  ]);
+  if(!pDoc.exists){ toast('El partido no existe', 'error'); return; }
+  const p = pDoc.data();
+  const equipos = eqSnap.docs.map(d => ({id:d.id, nombre:d.data().nombre}))
+    .sort((a,b)=> a.nombre.localeCompare(b.nombre));
+  const opts = (sel) => equipos.map(e => `<option value="${e.id}" ${e.id===sel?'selected':''}>${escapeHtml(e.nombre)}</option>`).join('');
+
+  // datetime-local necesita 'YYYY-MM-DDTHH:mm' en hora local
+  let fechaLocal = '';
+  if(p.fecha){
+    const d = new Date(p.fecha);
+    const off = d.getTimezoneOffset() * 60000;
+    fechaLocal = new Date(d.getTime() - off).toISOString().slice(0,16);
+  }
+
+  const yaTieneActa = p.estado === 'jugado' || p.estado === 'validado';
+
+  openModal(`
+    <h3>Editar partido</h3>
+    <div class="field-row">
+      <div class="field"><label>Equipo local</label><select id="epLocal">${opts(p.equipoLocalId)}</select></div>
+      <div class="field"><label>Equipo visitante</label><select id="epVisitante">${opts(p.equipoVisitanteId)}</select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Fecha y hora</label><input type="datetime-local" id="epFecha" value="${fechaLocal}"></div>
+      <div class="field"><label>Jornada</label><input type="number" id="epJornada" min="1" value="${p.jornada ?? ''}"></div>
+    </div>
+    <div class="field"><label>Cancha / sede</label><input type="text" id="epCancha" value="${escapeHtml(p.cancha||'')}"></div>
+    ${yaTieneActa ? `<div class="auth-note">Este partido ya tiene acta cargada. Si cambias los equipos, las incidencias registradas van a quedar apuntando a jugadores del equipo anterior.</div>` : ''}
+    <button class="btn btn-primary btn-block" onclick="guardarEdicionPartido('${partidoId}')">Guardar cambios</button>
+  `);
+}
+
+async function guardarEdicionPartido(partidoId){
+  const equipoLocalId = document.getElementById('epLocal').value;
+  const equipoVisitanteId = document.getElementById('epVisitante').value;
+  if(equipoLocalId === equipoVisitanteId){ toast('El local y el visitante deben ser distintos', 'error'); return; }
+  const fechaVal = document.getElementById('epFecha').value;
+  try{
+    await db.collection('partidos').doc(partidoId).update({
+      equipoLocalId, equipoVisitanteId,
+      fecha: fechaVal ? new Date(fechaVal).toISOString() : null,
+      jornada: Number(document.getElementById('epJornada').value) || null,
+      cancha: document.getElementById('epCancha').value.trim()
+    });
+    closeModal();
+    toast('Partido actualizado', 'success');
+    routeTo(currentView);
+  }catch(e){
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+async function eliminarPartido(partidoId){
+  if(!confirm('¿Eliminar este partido? Si tiene acta cargada, también se elimina.')) return;
+  try{
+    await db.collection('actas').doc(partidoId).delete().catch(()=>{});
+    await db.collection('partidos').doc(partidoId).delete();
+    toast('Partido eliminado');
+    routeTo(currentView);
+  }catch(e){
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+/* =========================================================================
+   VER ACTA (solo lectura, para cualquier rol)
+   ========================================================================= */
+async function verActaDetalle(partidoId){
+  const c = document.getElementById('content');
+  c.innerHTML = `<div class="loader" style="margin-top:60px;"></div>`;
+  try{
+    const [pDoc, aDoc] = await Promise.all([
+      db.collection('partidos').doc(partidoId).get(),
+      db.collection('actas').doc(partidoId).get()
+    ]);
+    const p = pDoc.data();
+    const [local, visitante] = await Promise.all([getEquipoNombre(p.equipoLocalId), getEquipoNombre(p.equipoVisitanteId)]);
+    const acta = aDoc.exists ? aDoc.data() : null;
+    const fecha = p.fecha ? new Date(p.fecha).toLocaleString('es-VE', {dateStyle:'medium', timeStyle:'short'}) : 'Sin fecha';
+
+    c.innerHTML = `
+      <button class="link-btn" onclick="routeTo(currentView)">← Volver</button>
+      <h2 style="margin-top:14px;">${escapeHtml(local)} ${acta ? (acta.golesLocal ?? 0) : ''} — ${acta ? (acta.golesVisitante ?? 0) : ''} ${escapeHtml(visitante)}</h2>
+      <p class="page-sub">Jornada ${p.jornada ?? '—'} · ${fecha}${p.cancha ? ' · ' + escapeHtml(p.cancha) : ''}</p>
+      <div class="acta-card">
+        <div class="acta-head">
+          <div>
+            <div class="jornada">${acta ? 'Árbitro: ' + escapeHtml(acta.arbitroNombre || '—') : 'Acta no cargada'}</div>
+            <div class="matchup">Incidencias</div>
+          </div>
+          <span class="acta-status status-${estadoClase(p)}">${estadoLabel(p)}</span>
+        </div>
+        <div class="acta-body">${acta ? renderIncidenciasHtml(acta.incidencias, local, visitante) : '<div class="empty-state" style="padding:20px;">El árbitro todavía no cargó el acta.</div>'}</div>
+      </div>
+      ${acta && acta.objeciones && acta.objeciones.length ? `
+      <div class="card">
+        <div class="section-title">Objeciones registradas</div>
+        ${acta.objeciones.map(o => `<div style="font-size:14px; padding:8px 0; border-bottom:1px dashed var(--bone-dim);">
+          <b>${escapeHtml(o.por||'')}</b>: ${escapeHtml(o.motivo||'')}
+        </div>`).join('')}
+      </div>` : ''}
+    `;
+  }catch(e){
+    c.innerHTML = `<div class="empty-state">Error: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+const ICONOS_INCIDENCIA = {gol:'⚽', amarilla:'▮', roja:'▮', otro:'i'};
+
+function renderIncidenciasHtml(incidencias, local, visitante){
+  if(!incidencias || incidencias.length === 0){
+    return '<div class="empty-state" style="padding:20px;">Sin incidencias registradas.</div>';
+  }
+  return incidencias.slice().sort((a,b)=>a.minuto-b.minuto).map(inc => `
+    <div class="incident-row">
+      <span class="incident-min">${inc.minuto}'</span>
+      <span class="incident-icon icon-${inc.tipo}">${ICONOS_INCIDENCIA[inc.tipo]||'i'}</span>
+      <span style="flex:1;">#${inc.jugadorNumero ?? '-'} ${escapeHtml(inc.jugadorNombre)}${inc.detalle ? ' — '+escapeHtml(inc.detalle) : ''}</span>
+      <span style="font-family:var(--eyebrow); font-size:12px; color:var(--ink-soft); white-space:nowrap;">${escapeHtml(inc.equipoLado === 'local' ? local : visitante)}</span>
+    </div>`).join('');
 }
 
 /* =========================================================================
