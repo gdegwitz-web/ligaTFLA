@@ -365,8 +365,8 @@ function renderConfigPending(){
         <p class="tag">Falta conectar Firebase</p>
         <div class="auth-note" style="margin-bottom:0;">
           Esta app todavía no tiene un proyecto de Firebase conectado.
-          Para activarla: creá un proyecto en Firebase, habilitá <b>Authentication (Email/Password)</b>,
-          <b>Firestore</b> y <b>Storage</b>, y pegá el <code>firebaseConfig</code> en la constante
+          Para activarla: crea un proyecto en Firebase, habilita <b>Authentication (Email/Password)</b>,
+          <b>Firestore</b> y <b>Storage</b>, y pega el <code>firebaseConfig</code> en la constante
           <code>firebaseConfig</code> al inicio del archivo <code>index.html</code>.
           También hay que subir las reglas de seguridad de Firestore (archivo <code>firestore.rules</code> adjunto).
         </div>
@@ -485,7 +485,7 @@ async function doLogin(){
   const email = document.getElementById('loginEmail').value.trim();
   const pass = document.getElementById('loginPass').value;
   showAuthError('');
-  if(!email || !pass){ showAuthError('Completá correo y contraseña.'); return; }
+  if(!email || !pass){ showAuthError('Completa correo y contraseña.'); return; }
   try{
     await auth.signInWithEmailAndPassword(email, pass);
   }catch(e){
@@ -501,9 +501,9 @@ async function doRegister(){
   const equipoId = rol === 'arbitro' ? null : (document.getElementById('regTeam').value || null);
 
   showAuthError('');
-  if(!nombre || !email || !pass){ showAuthError('Completá todos los campos.'); return; }
+  if(!nombre || !email || !pass){ showAuthError('Completa todos los campos.'); return; }
   if(pass.length < 6){ showAuthError('La contraseña debe tener al menos 6 caracteres.'); return; }
-  if(rol !== 'arbitro' && !equipoId){ showAuthError('Elegí un equipo.'); return; }
+  if(rol !== 'arbitro' && !equipoId){ showAuthError('Elige un equipo.'); return; }
 
   try{
     const cred = await auth.createUserWithEmailAndPassword(email, pass);
@@ -530,7 +530,7 @@ function translateAuthError(e){
     'auth/user-not-found': 'No existe una cuenta con ese correo.',
     'auth/wrong-password': 'Contraseña incorrecta.',
     'auth/invalid-credential': 'Correo o contraseña incorrectos.',
-    'auth/too-many-requests': 'Demasiados intentos. Probá de nuevo en un momento.'
+    'auth/too-many-requests': 'Demasiados intentos. Prueba de nuevo en un momento.'
   };
   return map[e.code] || ('Error: ' + e.message);
 }
@@ -545,7 +545,7 @@ function renderPendingScreen(){
         <p style="font-size:14px; color:var(--ink-soft); line-height:1.6; margin-bottom:20px;">
           Hola ${escapeHtml(currentProfile.nombre || '')}. Tu cuenta como <b>${ROLE_LABELS[currentProfile.rol]}</b>
           fue creada y está esperando que el delegado de tu equipo (o el administrador de la liga) la apruebe.
-          Volvé a intentar más tarde.
+          Vuelve a intentar más tarde.
         </p>
         <button class="btn btn-secondary btn-block" onclick="auth.signOut()">Cerrar sesión</button>
       </div>
@@ -693,13 +693,13 @@ async function renderInicio(){
 function inicioMensaje(){
   switch(currentProfile.rol){
     case ROLES.LIGA_ADMIN:
-      return 'Desde acá podés crear equipos, programar partidos, aprobar usuarios y supervisar las validaciones de actas.';
+      return 'Desde aquí puedes crear equipos, programar partidos, aprobar usuarios y supervisar las validaciones de actas.';
     case ROLES.DELEGADO:
-      return 'Gestioná la plantilla de tu equipo, aprobá jugadores nuevos y validá las actas de los partidos donde participó tu equipo.';
+      return 'Gestiona la plantilla de tu equipo, aprueba jugadores nuevos y valida las actas de los partidos donde participó tu equipo.';
     case ROLES.ARBITRO:
-      return 'Completá el acta de cada partido que dirigís: goleadores, tarjetas amarillas, rojas y demás incidencias.';
+      return 'Completa el acta de cada partido que arbitras: goleadores, tarjetas amarillas, rojas y demás incidencias.';
     default:
-      return 'Completá tu ficha de jugador y seguí las estadísticas y el calendario del torneo.';
+      return 'Completa tu ficha de jugador y sigue las estadísticas y el calendario del torneo.';
   }
 }
 
@@ -804,7 +804,7 @@ async function verEquipo(equipoId){
 async function renderMiPlantilla(){
   const c = document.getElementById('content');
   if(!currentProfile.equipoId){
-    c.innerHTML = `<h2>Mi plantilla</h2><div class="empty-state">Tu cuenta no tiene un equipo asignado. Contactá al administrador de la liga.</div>`;
+    c.innerHTML = `<h2>Mi plantilla</h2><div class="empty-state">Tu cuenta no tiene un equipo asignado. Contacta al administrador de la liga.</div>`;
     return;
   }
   c.innerHTML = `
@@ -883,7 +883,7 @@ async function rechazarUsuario(uid){
    ========================================================================= */
 async function renderMiFicha(){
   const c = document.getElementById('content');
-  c.innerHTML = `<h2>Mi ficha de jugador</h2><p class="page-sub">Completá tus datos — el delegado los verá en la plantilla del equipo</p><div class="card" id="fichaCard"><div class="loader"></div></div>`;
+  c.innerHTML = `<h2>Mi ficha de jugador</h2><p class="page-sub">Completa tus datos — el delegado los verá en la plantilla del equipo</p><div class="card" id="fichaCard"><div class="loader"></div></div>`;
 
   let existente = null;
   try{
@@ -1065,7 +1065,7 @@ async function crearPartido(){
    ========================================================================= */
 async function renderMisActas(){
   const c = document.getElementById('content');
-  c.innerHTML = `<h2>Mis actas</h2><p class="page-sub">Partidos programados — completá el acta al finalizar</p><div id="actasArea"><div class="loader"></div></div>`;
+  c.innerHTML = `<h2>Mis actas</h2><p class="page-sub">Partidos programados — completa el acta al finalizar</p><div id="actasArea"><div class="loader"></div></div>`;
   try{
     const snap = await db.collection('partidos').orderBy('fecha').get();
     const area = document.getElementById('actasArea');
@@ -1182,7 +1182,7 @@ function agregarIncidencia(){
   const lado = document.getElementById('incEquipoLado').value;
   const jugadorId = document.getElementById('incJugador').value;
   const detalle = document.getElementById('incDetalle').value.trim();
-  if(!jugadorId){ toast('Elegí un jugador', 'error'); return; }
+  if(!jugadorId){ toast('Elige un jugador', 'error'); return; }
   const jugador = window.__jugOptions.map[jugadorId];
   actaIncidenciasTemp.push({
     tipo, minuto, jugadorId, jugadorNombre: jugador.nombre, jugadorNumero: jugador.numero || null,
@@ -1327,7 +1327,7 @@ async function validarActa(partidoId, esLocal){
 }
 
 async function objetarActa(partidoId){
-  const motivo = prompt('Describí brevemente la objeción (el árbitro deberá corregir el acta):');
+  const motivo = prompt('Describe brevemente la objeción (el árbitro deberá corregir el acta):');
   if(motivo === null) return;
   try{
     await db.collection('partidos').doc(partidoId).update({ estado: 'jugado', enDisputa: true });
