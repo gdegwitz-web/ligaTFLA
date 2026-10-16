@@ -3628,8 +3628,7 @@ async function rechazarAlineacion(partidoId, equipoId){
    no respondió, o a un jugador cargado a mano que no tiene cuenta). Un documento por partido y jugador:
    «{partidoId}_{uid}», así nadie escribe sobre la respuesta de otro.
    ========================================================================= */
-const VENTANA_ASISTENCIA_DIAS = 21;     // el jugador ve los partidos de sus próximas 3 semanas
-const MAX_PARTIDOS_ASISTENCIA = 4;      // y como mucho 4 a la vez, para que el Inicio no se llene
+const MAX_PARTIDOS_ASISTENCIA = 3;      // el jugador ve sus próximos 3 partidos (sin límite de fecha), para que el Inicio no se llene
 function idAsistencia(partidoId, uid){ return `${partidoId}_${uid}`; }
 
 function jugadorPuedeConfirmar(){
@@ -3681,7 +3680,7 @@ async function cargarAsistenciaInicio(partidos){
   const ahora = Date.now(), eq = currentProfile.equipoId;
   const prox = partidos
     .filter(p => p.estado === 'programado' && (p.equipoLocalId === eq || p.equipoVisitanteId === eq))
-    .filter(p => { const f = p.fecha ? new Date(p.fecha).getTime() : NaN; return !isNaN(f) && f >= ahora - 3 * 3600000 && f <= ahora + VENTANA_ASISTENCIA_DIAS * 86400000; })
+    .filter(p => { const f = p.fecha ? new Date(p.fecha).getTime() : NaN; return !isNaN(f) && f >= ahora - 3 * 3600000; })
     .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''))
     .slice(0, MAX_PARTIDOS_ASISTENCIA);
   if(!prox.length) return '';
