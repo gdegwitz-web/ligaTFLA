@@ -3628,7 +3628,7 @@ async function rechazarAlineacion(partidoId, equipoId){
    no respondió, o a un jugador cargado a mano que no tiene cuenta). Un documento por partido y jugador:
    «{partidoId}_{uid}», así nadie escribe sobre la respuesta de otro.
    ========================================================================= */
-const MAX_PARTIDOS_ASISTENCIA = 3;      // el jugador ve sus próximos 3 partidos (sin límite de fecha), para que el Inicio no se llene
+const MAX_PARTIDOS_ASISTENCIA = 1;      // solo el próximo partido del equipo (sin límite de fecha), para no confundir
 function idAsistencia(partidoId, uid){ return `${partidoId}_${uid}`; }
 
 function jugadorPuedeConfirmar(){
@@ -3695,10 +3695,10 @@ function asistenciaInicioHtml(){
   const eq = currentProfile.equipoId;
   const sinResponder = _asist.partidos.filter(p => !_asist.mis.has(p.id)).length;
   return `<div class="asist-card" id="asistCard">
-    <h3>¿Vas a jugar?</h3>
+    <h3>¿Vas a jugar el próximo partido?</h3>
     <p class="asist-sub">${sinResponder
-      ? `Te falta responder ${sinResponder} partido${sinResponder === 1 ? '' : 's'}. Tu delegado usa esto para armar la convocatoria.`
-      : 'Ya respondiste todos. Puedes cambiar tu respuesta cuando quieras, hasta que se juegue el partido.'}</p>
+      ? 'Tu delegado usa tu respuesta para armar la convocatoria.'
+      : 'Ya respondiste. Puedes cambiarla cuando quieras, hasta que se juegue el partido.'}</p>
     ${_asist.partidos.map(p => {
       const rival = _asist.nombres[p.equipoLocalId === eq ? p.equipoVisitanteId : p.equipoLocalId] || 'Rival';
       const f = p.fecha ? new Date(p.fecha) : null;
