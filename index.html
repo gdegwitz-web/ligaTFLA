@@ -3741,7 +3741,9 @@ async function marcarAsistencia(partidoId, voy){
     toast(voy ? 'Anotado: vas al partido' : 'Anotado: no vas a este partido', 'success');
   }catch(e){
     console.error(e);
-    toast('No se pudo guardar tu respuesta. Revisa tu conexión e inténtalo de nuevo.', 'error');
+    toast(e && e.code === 'permission-denied'
+      ? 'Sin permiso para guardar tu respuesta. Avisa a la administración: puede faltar publicar las reglas de Firestore.'
+      : 'No se pudo guardar tu respuesta. Revisa tu conexión e inténtalo de nuevo.', 'error');
     botones.forEach(b => b.disabled = false);
   }
 }
