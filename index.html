@@ -1058,7 +1058,7 @@ table.stats-table tbody tr:hover td{background: var(--bone);}
 
 /* ============ PRÓXIMO PARTIDO Y PARTIDOS JUGADOS (v94) ============ */
 .lista-titulo{font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); margin:4px 2px 10px;}
-.acta-card.es-proximo{box-shadow:var(--sh), 0 0 0 2px var(--burgundy);}
+.acta-card.es-proximo{box-shadow:var(--sh), 0 0 0 2px var(--burgundy); scroll-margin-top:76px;}
 details.acta-card.pasado{background:var(--bone); border-left:5px solid var(--ink-faint);}
 details.acta-card.pasado.res-v{border-left-color:#2E7D4F;}
 details.acta-card.pasado.res-d{border-left-color:var(--card-red);}
@@ -4803,7 +4803,7 @@ async function renderMisPartidos(){
         </details>`;
         return { html: htmlPas, pend, rival, fecha, pasado: true, id: p.id };
       }
-      const html = `<div class="acta-card${pend ? ' con-pendiente' : ''}${proximoMp && p.id === proximoMp.id ? ' es-proximo' : ''}">
+      const html = `<div ${proximoMp && p.id === proximoMp.id ? 'id="mpProximo" ' : ''}class="acta-card${pend ? ' con-pendiente' : ''}${proximoMp && p.id === proximoMp.id ? ' es-proximo' : ''}">
         <div class="acta-head">
           <div>
             <div class="jornada">${proximoMp && p.id === proximoMp.id ? '<b>PRÓXIMO PARTIDO</b> · ' : ''}Jornada ${p.jornada ?? '—'} · ${fecha} · ${esLocal ? 'Local' : 'Visitante'}</div>
@@ -4823,13 +4823,10 @@ async function renderMisPartidos(){
     document.getElementById('mpArea').innerHTML =
       (conPend.length ? bannerPendientesHtml(`Tienes ${conPend.length} partido${conPend.length === 1 ? '' : 's'} con algo por hacer`,
         conPend.map(t => `vs ${escapeHtml(t.rival)} · ${escapeHtml(t.fecha)}: <b>${escapeHtml(t.pend.texto)}</b>`)) : '')
-      + (() => {
-        const prox = tarjetas.filter(t => !t.pasado), pas = tarjetas.filter(t => t.pasado).reverse();
-        // El próximo partido va de primero; si quedó algún partido atrasado sin acta, va después.
-        if(proximoMp) prox.sort((a, b) => (b.id === proximoMp.id) - (a.id === proximoMp.id));
-        return (prox.length ? `<div class="lista-titulo">Próximos partidos</div>${prox.map(t => t.html).join('')}` : '')
-          + (pas.length ? `<div class="lista-titulo" style="margin-top:22px;">Partidos jugados · ${pas.length}</div>${pas.map(t => t.html).join('')}` : '');
-      })();
+      + tarjetas.map(t => t.html).join('');
+    // Orden cronológico: los jugados (plegados) arriba y, al abrir el módulo, se baja solo hasta el próximo partido.
+    const sig = document.getElementById('mpProximo');
+    if(sig && sig.offsetTop > 120) setTimeout(() => sig.scrollIntoView({ block: 'start' }), 60);
   }catch(e){
     document.getElementById('mpArea').innerHTML = `<div class="empty-state">Error: ${escapeHtml(e.message)}</div>`;
   }
